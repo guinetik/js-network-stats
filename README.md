@@ -72,7 +72,9 @@ The script uses [Louvain](https://github.com/upphiminn/jLouvain) community detec
 
 ### **betweenness**
 Betweenness centrality represents the degree to which nodes stand between each other. The script computes the shortest-path betweenness centrality for nodes. The betweenness centrality of a node `v` is the sum of the fraction of all-pairs shortest paths that pass through `v`: 
+
 $$ c_B(v) =\sum_{s,t \in V} \frac{\sigma(s, t|v)}{\sigma(s, t)} $$ 
+
 where `V` is the set of nodes, 
 is the number of shortest $(s, t)$ paths, and $\sigma(s, t|v)$ is the number of those paths passing through some node `v` other than $s, t$. If $s = t$, $\sigma(s, t) = 1$, and if $v \in {s, t}$, $\sigma(s, t|v) = 0$.
 
