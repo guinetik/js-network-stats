@@ -1,0 +1,32 @@
+{
+  "name": "js-network-stats",
+  "version": "1.0.0",
+  "description": "A nodejs micro package to help calculating stats for network graphs",
+  "main": "./src/index.js",
+  "scripts": {
+    "test": "jest --coverage",
+    "runner": "node ./src/index.runner.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/guinetik/js-network-stats.git"
+  },
+  "keywords": [
+    "networkx",
+    "graphs",
+    "eigenvectors",
+    "modularity"
+  ],
+  "author": "guinetik",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/guinetik/js-network-stats/issues"
+  },
+  "homepage": "https://github.com/guinetik/js-network-stats#readme",
+  "dependencies": {
+    "jsnetworkx": "^0.3.4"
+  },
+  "devDependencies": {
+    "jest": "^28.1.3"
+  }
+}
