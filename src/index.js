@@ -1,146 +1,150 @@
-const jsnetworkx = require("jsnetworkx");
-const louvain = require("./lib.louvain");
-const FEATURES = {
-  EIGENVECTOR: "eigenvector",
-  MODULARITY: "modularity",
-  BETWEENNESS: "betweenness",
-  CLUSTERING: "clustering",
-  TRANSITIVITY: "transitivity",
-  CLIQUES: "cliques",
-  DEGREE: "degree",
-  ALL: [
-    "degree",
-    "modularity",
-    "cliques",
-    "eigenvector",
-    "betweenness",
-    "clustering",
-  ],
-};
-/**
- * @typedef NetworkEdge - An edge in a network is one of the connections between nodes or vertices of the network.
- * @type {Object}
- * @property {string} source - The ID of the source node.
- * @property {string} target - The ID of the target node.
- */
-/**
- * Generates a set of stats for a given graph network.
- * @param {Array<NetworkEdge>} network - The network to be analyzed.
- * @param {Array<string>} features- a list of features to be included in the stats.
- */
-const getNetworkStats = (
-  network,
-  features,
-  options = { maxIter: 100000, verbose: true }
-) => {
-  console.time("getNetworkStats");
-  if (options.verbose) console.log("processing", network.length, "records");
-  if (!features) features = FEATURES.ALL;
-  //get unique source and target values from network
-  const nodes = getDistinctNodes(network, "source").concat(
-    getDistinctNodes(network, "target")
-  );
-  const distinct = nodes.filter((item, pos) => nodes.indexOf(item) === pos);
-  const edges = reduce2EdgeTuples(network);
-  var G = new jsnetworkx.Graph();
-  G.addNodesFrom(distinct);
-  G.addEdgesFrom(edges);
-  //
-  const stats = {};
-  if (features.includes(FEATURES.EIGENVECTOR)) {
-    try {
-      if (options.verbose) console.log("processing EIGENVECTOR");
-      stats[FEATURES.EIGENVECTOR] = jsnetworkx.eigenvectorCentrality(G, {
-        maxIter: options.maxIter,
-      })._stringValues;
-    } catch (err) {
-      if (options.verbose)
-        console.log("error processing FEATURES.EIGENVECTOR:", err);
-    }
-  }
-  //
-  if (features.includes(FEATURES.BETWEENNESS)) {
-    try {
-      if (options.verbose) console.log("processing BETWEENNESS");
-      stats[FEATURES.BETWEENNESS] =
-        jsnetworkx.betweennessCentrality(G)._stringValues;
-    } catch (err) {
-      if (options.verbose)
-        console.log("error processing FEATURES.BETWEENNESS:", err);
-    }
-  }
-  //
-  if (features.includes(FEATURES.CLUSTERING)) {
-    try {
-      if (options.verbose) console.log("processing CLUSTERING");
-      stats[FEATURES.CLUSTERING] = jsnetworkx.clustering(G)._stringValues;
-    } catch (err) {
-      if (options.verbose)
-        console.log("error processing FEATURES.CLUSTERING:", err);
-    }
-  }
-  //
-  if (features.includes(FEATURES.CLIQUES)) {
-    try {
-      if (options.verbose) console.log("processing CLIQUES");
-      stats[FEATURES.CLIQUES] = jsnetworkx.numberOfCliques(G)._stringValues;
-    } catch (err) {
-      if (options.verbose)
-        console.log("error processing FEATURES.CLIQUES:", err);
-    }
-  }
-  //
-  if (features.includes(FEATURES.DEGREE)) {
-    try {
-      if (options.verbose) console.log("processing DEGREE");
-      stats[FEATURES.DEGREE] = jsnetworkx.degree(G)._stringValues;
-    } catch (err) {
-      if (options.verbose)
-        console.log("error processing FEATURES.DEGREE:", err);
-    }
-  }
-  //
-  if (features.includes(FEATURES.MODULARITY)) {
-    try {
-      if (options.verbose) console.log("processing MODULARITY");
-      let community = louvain().nodes(distinct).edges(network);
-      stats[FEATURES.MODULARITY] = community();
-    } catch (err) {
-      if (options.verbose)
-        console.log("error processing FEATURES.MODULARITY:", err);
-    }
-  }
-  //
-  return normalizeFeatures(stats, distinct);
-};
+import Graph from "./graph.js";
+import { Louvain } from "./louvain.js";
+import { Network } from "./network.js";
+export class NetworkStats {
+  static FEATURES = {
+    EIGENVECTOR: "eigenvector",
+    MODULARITY: "modularity",
+    BETWEENNESS: "betweenness",
+    CLUSTERING: "clustering",
+    TRANSITIVITY: "transitivity",
+    CLIQUES: "cliques",
+    DEGREE: "degree",
+    ALL: [
+      "degree",
+      "modularity",
+      "cliques",
+      "eigenvector",
+      "betweenness",
+      "clustering",
+    ],
+  };
 
-normalizeFeatures = (stats, nodes) => {
-  const normalized = [];
-  for (const node of nodes) {
-    const nodeStats = {};
-    nodeStats.id = node;
-    for (const feature in stats) {
-      nodeStats[feature] = stats[feature][node];
-    }
-    normalized.push(nodeStats);
+  constructor(options = {}) {
+    this.options = {
+      maxIter: options.maxIter || 100000,
+      verbose: options.verbose !== undefined ? options.verbose : true,
+      louvainModule: options.louvainModule || { Louvain }
+    };
+    
+    // Define feature processors as a map of functions
+    this.featureProcessors = {
+      [NetworkStats.FEATURES.EIGENVECTOR]: this.#processEigenvector.bind(this),
+      [NetworkStats.FEATURES.BETWEENNESS]: this.#processBetweenness.bind(this),
+      [NetworkStats.FEATURES.CLUSTERING]: this.#processClustering.bind(this),
+      [NetworkStats.FEATURES.CLIQUES]: this.#processCliques.bind(this),
+      [NetworkStats.FEATURES.DEGREE]: this.#processDegree.bind(this),
+      [NetworkStats.FEATURES.MODULARITY]: this.#processModularity.bind(this)
+    };
   }
-  console.timeEnd("getNetworkStats");
-  return normalized;
-};
 
-const getDistinctNodes = (network, prop) => {
-  return network
-    .map((item) => item[prop])
-    .filter((value, index, self) => self.indexOf(value) === index);
-};
-const reduce2EdgeTuples = (network) => {
-  return network.reduce((acc, curr) => {
-    const edge = [];
-    edge.push(curr.source);
-    edge.push(curr.target);
-    acc.push(edge);
-    return acc;
-  }, []);
-};
-//
-module.exports = getNetworkStats;
+  analyze(network, features) {
+    console.time("networkAnalysis");
+    
+    if (this.options.verbose) {
+      console.log("processing", network.length, "records");
+    }
+    
+    // Use default features if none provided
+    features = features || NetworkStats.FEATURES.ALL;
+    
+    // Extract network data
+    const { graph, nodes } = this.#prepareNetwork(network);
+    
+    // Process each requested feature
+    const stats = this.#processFeatures(graph, features, nodes);
+    
+    // Normalize and return results
+    const result = this.#normalizeFeatures(stats, nodes);
+    
+    console.timeEnd("networkAnalysis");
+    return result;
+  }
+
+  #prepareNetwork(network) {
+    // Get unique nodes from network
+    const nodesFromSource = this.#getDistinctNodes(network, "source");
+    const nodesFromTarget = this.#getDistinctNodes(network, "target");
+    const nodes = [...new Set([...nodesFromSource, ...nodesFromTarget])];
+    
+    // Create and populate the graph
+    const graph = new Graph();
+    graph.addNodesFrom(nodes);
+    
+    // Add edges to graph
+    network.forEach(({ source, target, weight = 1 }) => {
+      graph.addEdge(source, target, weight);
+    });
+    
+    return { graph, nodes };
+  }
+
+  #processFeatures(graph, features, nodes) {
+    const stats = {};
+    
+    // Process each requested feature
+    for (const feature of features) {
+      if (this.featureProcessors[feature]) {
+        try {
+          if (this.options.verbose) {
+            console.log(`processing ${feature.toUpperCase()}`);
+          }
+          
+          stats[feature] = this.featureProcessors[feature](graph, nodes);
+        } catch (err) {
+          if (this.options.verbose) {
+            console.log(`error processing ${feature}:`, err);
+          }
+        }
+      }
+    }
+    
+    return stats;
+  }
+
+  #processEigenvector(graph) {
+    return Network.eigenvectorCentrality(graph, {
+      maxIter: this.options.maxIter,
+    })._stringValues;
+  }
+
+  #processBetweenness(graph) {
+    return Network.betweennessCentrality(graph)._stringValues;
+  }
+
+  #processClustering(graph) {
+    return Network.clustering(graph)._stringValues;
+  }
+
+  #processCliques(graph) {
+    return Network.numberOfCliques(graph)._stringValues;
+  }
+
+  #processDegree(graph) {
+    return Network.degree(graph)._stringValues;
+  }
+
+  #processModularity(graph, nodes) {
+    return Network.modularity(graph, {
+      louvainModule: this.options.louvainModule
+    });
+  }
+
+  #normalizeFeatures(stats, nodes) {
+    return nodes.map(node => {
+      const nodeStats = { id: node };
+      
+      for (const [feature, values] of Object.entries(stats)) {
+        nodeStats[feature] = values[node];
+      }
+      
+      return nodeStats;
+    });
+  }
+
+  #getDistinctNodes(network, prop) {
+    return [...new Set(network.map(item => item[prop]))];
+  }
+}
+
+export default NetworkStats;
