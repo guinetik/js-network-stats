@@ -1,0 +1,1421 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Family Tree Visualization</title>
+    <style>
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: sans-serif;
+        }
+
+        #controls {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            margin: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+
+        .button:hover {
+            background: #45a049;
+        }
+
+        .button.parents {
+            background: #e91e63;
+        }
+        
+        .button.parents:hover {
+            background: #c2185b;
+        }
+        
+        .button.siblings {
+            background: #2196f3;
+        }
+        
+        .button.siblings:hover {
+            background: #1976d2;
+        }
+        
+        .button.uncle {
+            background: #ff9800;
+        }
+        
+        .button.uncle:hover {
+            background: #f57c00;
+        }
+        
+        .button.cousin {
+            background: #9c27b0;
+        }
+        
+        .button.cousin:hover {
+            background: #7b1fa2;
+        }
+        
+        .button.grandparent {
+            background: #795548;
+        }
+        
+        .button.grandparent:hover {
+            background: #5d4037;
+        }
+        
+        .button.niece-nephew {
+            background: #4caf50;
+        }
+        
+        .button.niece-nephew:hover {
+            background: #388e3c;
+        }
+        
+        .button.child {
+            background: #00bcd4;
+        }
+        
+        .button.child:hover {
+            background: #0097a7;
+        }
+
+        #info {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            padding: 10px;
+            text-align: center;
+            font-size: 14px;
+            color: #666;
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        #node-info {
+            margin-top: 10px;
+            font-size: 12px;
+        }
+        
+        /* Family relationship styles */
+        .family-legend {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            z-index: 100;
+            font-size: 12px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        
+        .legend-color {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+        
+        .you { background-color: #3f51b5; }
+        .parent { background-color: #e91e63; }
+        .sibling { background-color: #2196f3; }
+        .uncle-aunt { background-color: #ff9800; }
+        .cousin { background-color: #9c27b0; }
+        .grandparent { background-color: #795548; }
+        .niece-nephew { background-color: #4caf50; }
+        .child { background-color: #00bcd4; }
+
+        /* Dialog styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .modal-dialog {
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            width: 300px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+        
+        .modal-title {
+            margin-top: 0;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        
+        .modal-content {
+            margin: 15px 0;
+        }
+        
+        .input-field {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        
+        .modal-actions {
+            display: flex;
+            justify-content: flex-end;
+        }
+        
+        .modal-btn {
+            padding: 8px 16px;
+            margin-left: 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        
+        .modal-btn.primary {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        .modal-btn.secondary {
+            background-color: #f1f1f1;
+            color: #333;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+</head>
+
+<body>
+    <div id="controls">
+        <button id="add-parents" class="button parents">Add Parents</button>
+        <button id="add-sibling" class="button siblings">Add Sibling</button>
+        <button id="add-grandparents" class="button grandparent">Add Grandparents</button>
+        <button id="add-uncle" class="button uncle">Add Uncle/Aunt</button>
+        <button id="add-cousin" class="button cousin">Add Cousin</button>
+        <button id="add-child" class="button child">Add Child to Anyone</button>
+        <button id="add-niece-nephew" class="button niece-nephew">Add Niece/Nephew</button>
+        <div class="button-separator" style="margin: 10px 0; border-top: 1px solid #ccc;"></div>
+        <button id="save-family" class="button" style="background: #607d8b;">Save Family</button>
+        <button id="save-image" class="button" style="background: #009688;">Save as Image</button>
+        <button id="reset-family" class="button" style="background: #f44336;">Reset</button>
+        <button id="lock-graph" class="button" style="background: #e91e63;">Lock Graph</button>
+        <button id="unlock-graph" class="button" style="background: #ff9800;">Unlock Graph</button>
+        <div id="node-info"></div>
+    </div>
+
+    <div class="family-legend">
+        <h3>Family Legend</h3>
+        <div class="legend-item">
+            <div class="legend-color you"></div>
+            <div>You</div>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color parent"></div>
+            <div>Parents</div>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color sibling"></div>
+            <div>Siblings</div>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color uncle-aunt"></div>
+            <div>Uncles/Aunts</div>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color cousin"></div>
+            <div>Cousins</div>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color grandparent"></div>
+            <div>Grandparents</div>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color niece-nephew"></div>
+            <div>Nieces/Nephews</div>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color child"></div>
+            <div>Children</div>
+        </div>
+    </div>
+
+    <div id="info">
+        Family Tree Visualization. Drag nodes to reposition your family members.
+        Double-click nodes to release them after dragging.
+    </div>
+
+    <script type="module">
+        import NetworkGraph from './src/networkgraph.d3.js';
+        import DialogForm from './src/dialog.js';
+
+        // Define family relationship groups
+        const FAMILY_GROUPS = {
+            YOU: 1,
+            PARENT: 2,
+            SIBLING: 3,
+            UNCLE_AUNT: 4,
+            COUSIN: 5,
+            GRANDPARENT: 6,
+            NIECE_NEPHEW: 7,
+            CHILD: 8
+        };
+        
+        // Group names for display
+        const GROUP_NAMES = {
+            1: "You",
+            2: "Parent",
+            3: "Sibling",
+            4: "Uncle/Aunt",
+            5: "Cousin",
+            6: "Grandparent", 
+            7: "Niece/Nephew",
+            8: "Child"
+        };
+        
+        // Color mapping to ensure correct colors
+        const GROUP_COLORS = {
+            1: "#3f51b5", // You (blue-purple)
+            2: "#e91e63", // Parent (pink)
+            3: "#2196f3", // Sibling (blue)
+            4: "#ff9800", // Uncle/Aunt (orange)
+            5: "#9c27b0", // Cousin (purple)
+            6: "#795548", // Grandparent (brown)
+            7: "#4caf50", // Niece/Nephew (green)
+            8: "#00bcd4"  // Child (teal)
+        };
+        
+        // Family relationships lookup
+        const familyRelations = {
+            parents: new Map(), // Maps parent name to parent node
+            siblings: new Set(), // Set of sibling IDs
+            uncles: new Map(), // Maps uncle/aunt name to parent they're related to
+            cousins: new Map() // Maps cousin name to their parent name
+        };
+
+        // Initialize the network graph with just YOU
+        const initialData = {
+            nodes: [
+                { id: 'YOU', group: FAMILY_GROUPS.YOU }
+            ],
+            links: []
+        };
+
+        const graph = new NetworkGraph('body', window.innerWidth, window.innerHeight);
+        
+        // Override the default color scale with our custom color mapping
+        graph.nodeColors = (group) => GROUP_COLORS[group] || "#999";
+        
+        // Local Storage Functions
+        function saveFamilyToLocalStorage() {
+            const familyData = {
+                nodes: graph.data.nodes.map(node => ({
+                    id: node.id,
+                    group: node.group,
+                    x: node.x,
+                    y: node.y,
+                    fx: node.fx,
+                    fy: node.fy
+                })),
+                links: graph.data.links.map(link => ({
+                    source: typeof link.source === 'object' ? link.source.id : link.source,
+                    target: typeof link.target === 'object' ? link.target.id : link.target
+                })),
+                familyRelations: {
+                    parents: Array.from(familyRelations.parents.entries()),
+                    siblings: Array.from(familyRelations.siblings),
+                    uncles: Array.from(familyRelations.uncles.entries()),
+                    cousins: Array.from(familyRelations.cousins.entries())
+                }
+            };
+            
+            localStorage.setItem('familyTreeData', JSON.stringify(familyData));
+            
+            // Show save confirmation in the node-info display instead of an alert
+            const nodeInfo = document.getElementById('node-info');
+            if (nodeInfo) {
+                nodeInfo.innerHTML = `<strong>Family tree saved!</strong><br>Last saved: ${new Date().toLocaleTimeString()}`;
+                
+                // Clear the message after 3 seconds
+                setTimeout(() => {
+                    if (nodeInfo.innerHTML.includes('Family tree saved')) {
+                        nodeInfo.innerHTML = '';
+                    }
+                }, 3000);
+            }
+        }
+        
+        function loadFamilyFromLocalStorage() {
+            const savedData = localStorage.getItem('familyTreeData');
+            if (!savedData) {
+                return false;
+            }
+            
+            try {
+                const familyData = JSON.parse(savedData);
+                
+                // Restore nodes and links
+                graph.setData(familyData.nodes, familyData.links);
+                
+                // Restore family relations
+                familyRelations.parents = new Map(familyData.familyRelations.parents);
+                familyRelations.siblings = new Set(familyData.familyRelations.siblings);
+                familyRelations.uncles = new Map(familyData.familyRelations.uncles);
+                familyRelations.cousins = new Map(familyData.familyRelations.cousins);
+                
+                // Ensure the graph is centered in the viewport
+                graph.centralizeNodes();
+                graph.simulation.alpha(0.3).restart();
+                
+                return true;
+            } catch (error) {
+                console.error('Error loading family data:', error);
+                return false;
+            }
+        }
+        
+        function resetFamily() {
+            // Use node-info for confirmation instead of an alert
+            const nodeInfo = document.getElementById('node-info');
+            
+            // Show confirmation request
+            if (nodeInfo) {
+                nodeInfo.innerHTML = `
+                    <strong>Reset family tree?</strong><br>
+                    <button id="confirm-reset" style="background:#f44336;color:white;border:none;padding:5px;margin-right:5px;cursor:pointer;">Yes</button>
+                    <button id="cancel-reset" style="background:#9e9e9e;color:white;border:none;padding:5px;cursor:pointer;">No</button>
+                `;
+                
+                // Add event listeners for the confirmation buttons
+                document.getElementById('confirm-reset').addEventListener('click', () => {
+                    localStorage.removeItem('familyTreeData');
+                    
+                    // Reset family relations
+                    familyRelations.parents = new Map();
+                    familyRelations.siblings = new Set();
+                    familyRelations.uncles = new Map();
+                    familyRelations.cousins = new Map();
+                    
+                    // Reset graph to initial state
+                    graph.setData(initialData.nodes, initialData.links);
+                    
+                    // Show reset confirmation
+                    nodeInfo.innerHTML = '<strong>Family tree reset complete!</strong>';
+                    
+                    // Clear the message after 3 seconds
+                    setTimeout(() => {
+                        if (nodeInfo.innerHTML.includes('reset complete')) {
+                            nodeInfo.innerHTML = '';
+                        }
+                    }, 3000);
+                });
+                
+                document.getElementById('cancel-reset').addEventListener('click', () => {
+                    // Clear the confirmation
+                    nodeInfo.innerHTML = '';
+                });
+            }
+        }
+        
+        // Try to load saved family data or initialize with default
+        if (!loadFamilyFromLocalStorage()) {
+            graph.setData(initialData.nodes, initialData.links);
+            
+            // Force centralization and higher initial energy for the default node
+            graph.centralizeNodes();
+            graph.simulation.alpha(1.0).restart();
+        }
+        
+        // Auto-save 
+        function autoSave() {
+            const familyData = {
+                nodes: graph.data.nodes.map(node => ({
+                    id: node.id,
+                    group: node.group,
+                    x: node.x,
+                    y: node.y,
+                    fx: node.fx,
+                    fy: node.fy
+                })),
+                links: graph.data.links.map(link => ({
+                    source: typeof link.source === 'object' ? link.source.id : link.source,
+                    target: typeof link.target === 'object' ? link.target.id : link.target
+                })),
+                familyRelations: {
+                    parents: Array.from(familyRelations.parents.entries()),
+                    siblings: Array.from(familyRelations.siblings),
+                    uncles: Array.from(familyRelations.uncles.entries()),
+                    cousins: Array.from(familyRelations.cousins.entries())
+                }
+            };
+            
+            localStorage.setItem('familyTreeData', JSON.stringify(familyData));
+            
+            // Optionally show a subtle indicator of auto-save in node-info only if it's empty
+            const nodeInfo = document.getElementById('node-info');
+            if (nodeInfo && nodeInfo.innerHTML === '') {
+                nodeInfo.innerHTML = '<small style="color:#999">Auto-saved</small>';
+                
+                // Clear the message after 1 second
+                setTimeout(() => {
+                    if (nodeInfo.innerHTML.includes('Auto-saved')) {
+                        nodeInfo.innerHTML = '';
+                    }
+                }, 1000);
+            }
+        }
+        // Set up auto-save
+        const autoSaveInterval = setInterval(autoSave, 30000);
+        
+        // Add event listeners for save and reset buttons
+        document.getElementById('save-family').addEventListener('click', saveFamilyToLocalStorage);
+        document.getElementById('reset-family').addEventListener('click', resetFamily);
+        document.getElementById('save-image').addEventListener('click', saveAsImage);
+        document.getElementById('lock-graph').addEventListener('click', lockGraphPositions);
+        document.getElementById('unlock-graph').addEventListener('click', unlockGraphPositions);
+        
+        // Set up custom node info display
+        graph.setNodeInfoCallback = (node) => {
+            const nodeInfo = document.getElementById('node-info');
+            if (nodeInfo) {
+                const groupName = GROUP_NAMES[node.group] || "Unknown";
+                nodeInfo.innerHTML = `<strong>${node.id}</strong><br>Relation: ${groupName}<br/>Centrality: ${node.centrality.toFixed(4)}`;
+            }
+        };
+        
+        // Initialize the dialog system
+        const dialogs = new DialogForm();
+        
+        // Add parents
+        document.getElementById('add-parents').addEventListener('click', () => {
+            // Check if parents already exist
+            if (familyRelations.parents.size >= 2) {
+                alert('You already have two parents added!');
+                return;
+            }
+            
+            // Create form for parents
+            const motherInput = dialogs.createInput("Mother's Name:", 'text', 'mother-name');
+            const fatherInput = dialogs.createInput("Father's Name:", 'text', 'father-name');
+            
+            const content = document.createElement('div');
+            content.appendChild(motherInput.container);
+            content.appendChild(fatherInput.container);
+            
+            dialogs.createModal(
+                "Add Parents",
+                content,
+                [
+                    {
+                        text: "Cancel",
+                        primary: false
+                    },
+                    {
+                        text: "Add",
+                        primary: true,
+                        onClick: () => {
+                            const motherName = motherInput.input.value.trim();
+                            const fatherName = fatherInput.input.value.trim();
+                            
+                            if (!motherName || !fatherName) {
+                                alert("Please enter both names");
+                                return;
+                            }
+                            
+                            // Add mother node connected to YOU
+                            if (!familyRelations.parents.has(motherName)) {
+                                const motherNode = graph.addNode(['YOU'], motherName, FAMILY_GROUPS.PARENT);
+                                familyRelations.parents.set(motherName, motherNode);
+                                console.log(`Added mother: ${motherName}`);
+                            }
+                            
+                            // Add father node connected to YOU
+                            if (!familyRelations.parents.has(fatherName)) {
+                                const fatherNode = graph.addNode(['YOU'], fatherName, FAMILY_GROUPS.PARENT);
+                                familyRelations.parents.set(fatherName, fatherNode);
+                                console.log(`Added father: ${fatherName}`);
+                            }
+                            
+                            // Connect parents to each other
+                            graph.addLink(motherName, fatherName);
+                        }
+                    }
+                ]
+            );
+        });
+        
+        // Add sibling
+        document.getElementById('add-sibling').addEventListener('click', () => {
+            // Check if parents exist
+            if (familyRelations.parents.size === 0) {
+                alert('Please add parents first!');
+                return;
+            }
+            
+            const siblingInput = dialogs.createInput("Sibling's Name:", 'text', 'sibling-name');
+            const spouseInput = dialogs.createInput("Spouse's Name (optional):", 'text', 'spouse-name');
+            
+            const content = document.createElement('div');
+            content.appendChild(siblingInput.container);
+            content.appendChild(spouseInput.container);
+            
+            dialogs.createModal(
+                "Add Sibling",
+                content,
+                [
+                    {
+                        text: "Cancel",
+                        primary: false
+                    },
+                    {
+                        text: "Add",
+                        primary: true,
+                        onClick: () => {
+                            const siblingName = siblingInput.input.value.trim();
+                            const spouseName = spouseInput.input.value.trim();
+                            
+                            if (!siblingName) {
+                                alert("Please enter a name");
+                                return;
+                            }
+                            
+                            if (familyRelations.siblings.has(siblingName)) {
+                                alert(`Sibling ${siblingName} already exists!`);
+                                return;
+                            }
+                            
+                            // Connect sibling to both parents
+                            const parentIds = Array.from(familyRelations.parents.keys());
+                            const siblingNode = graph.addNode(parentIds, siblingName, FAMILY_GROUPS.SIBLING);
+                            
+                            // Store the sibling reference
+                            familyRelations.siblings.add(siblingName);
+                            
+                            console.log(`Added sibling: ${siblingName} connected to parents: ${parentIds.join(', ')}`);
+                            
+                            // If spouse name provided, add spouse and connect to sibling
+                            if (spouseName) {
+                                // Check if spouse already exists
+                                if (!graph.hasNode(spouseName)) {
+                                    // Add spouse node (not connected to parents, just to sibling)
+                                    const spouseNode = graph.addNode([siblingName], spouseName, FAMILY_GROUPS.SIBLING);
+                                    console.log(`Added spouse: ${spouseName} connected to ${siblingName}`);
+                                } else {
+                                    // If spouse already exists, just connect them
+                                    graph.addLink(siblingName, spouseName);
+                                    console.log(`Connected existing person ${spouseName} as spouse to ${siblingName}`);
+                                }
+                            }
+                        }
+                    }
+                ]
+            );
+        });
+        
+        // Add uncle/aunt
+        document.getElementById('add-uncle').addEventListener('click', () => {
+            // Check if parents exist first
+            if (familyRelations.parents.size < 2) {
+                alert('Please add both parents first!');
+                return;
+            }
+            
+            // Get parent IDs
+            const parentIds = Array.from(familyRelations.parents.keys());
+            
+            // Create grandparent pairs grouped by parent side
+            const grandparentPairs = new Map();
+            
+            // Find grandparent pairs for each parent
+            for (const parentId of parentIds) {
+                // Find all grandparents connected to this parent
+                const connectedGrandparents = [];
+                
+                graph.data.links.forEach(link => {
+                    const sourceId = link.source.id || link.source;
+                    const targetId = link.target.id || link.target;
+                    
+                    // If this link connects a parent and a grandparent
+                    if (sourceId === parentId || targetId === parentId) {
+                        const otherNode = sourceId === parentId ? targetId : sourceId;
+                        
+                        // Check if the other node is a grandparent
+                        const isGrandparent = graph.data.nodes.some(node => 
+                            node.id === otherNode && node.group === FAMILY_GROUPS.GRANDPARENT
+                        );
+                        
+                        if (isGrandparent) {
+                            connectedGrandparents.push(otherNode);
+                        }
+                    }
+                });
+                
+                // If we found a pair of grandparents for this parent
+                if (connectedGrandparents.length === 2) {
+                    grandparentPairs.set(parentId, connectedGrandparents);
+                }
+            }
+            
+            // Check if we have any grandparent pairs
+            if (grandparentPairs.size === 0) {
+                alert('Please add complete sets of grandparents first (maternal and/or paternal)!');
+                return;
+            }
+            
+            // Create parent side options
+            const sideOptions = [];
+            
+            for (const [parentId, grandparents] of grandparentPairs.entries()) {
+                sideOptions.push({
+                    value: parentId,
+                    text: `${parentId}'s side (${grandparents.join(' & ')})`
+                });
+            }
+            
+            // Create the dialog
+            const parentSideSelect = dialogs.createSelect("Which side:", sideOptions, 'parent-side-select');
+            const uncleInput = dialogs.createInput("Uncle/Aunt's Name:", 'text', 'uncle-name');
+            const spouseInput = dialogs.createInput("Spouse's Name (optional):", 'text', 'spouse-name');
+            
+            const content = document.createElement('div');
+            content.appendChild(parentSideSelect.container);
+            content.appendChild(uncleInput.container);
+            content.appendChild(spouseInput.container);
+            
+            dialogs.createModal(
+                "Add Uncle/Aunt",
+                content,
+                [
+                    {
+                        text: "Cancel",
+                        primary: false
+                    },
+                    {
+                        text: "Add",
+                        primary: true,
+                        onClick: () => {
+                            const parentSide = parentSideSelect.select.value;
+                            const uncleName = uncleInput.input.value.trim();
+                            const spouseName = spouseInput.input.value.trim();
+                            
+                            if (!uncleName) {
+                                alert("Please enter uncle/aunt's name");
+                                return;
+                            }
+                            
+                            if (familyRelations.uncles.has(uncleName)) {
+                                alert(`Uncle/Aunt ${uncleName} already exists!`);
+                                return;
+                            }
+                            
+                            // Get the grandparents for this parent's side
+                            const grandparents = grandparentPairs.get(parentSide);
+                            
+                            if (!grandparents || grandparents.length !== 2) {
+                                alert("Could not find a complete pair of grandparents for this side!");
+                                return;
+                            }
+                            
+                            // Add uncle/aunt connected to BOTH grandparents on this side
+                            const uncleNode = graph.addNode(grandparents, uncleName, FAMILY_GROUPS.UNCLE_AUNT);
+                            
+                            // Store the relationship to the parent
+                            familyRelations.uncles.set(uncleName, parentSide);
+                            
+                            console.log(`Added uncle/aunt: ${uncleName} connected to grandparents ${grandparents.join(' & ')} (${parentSide}'s side)`);
+                            
+                            // If spouse name provided, add spouse and connect to uncle/aunt
+                            if (spouseName) {
+                                // Check if spouse already exists
+                                if (!graph.hasNode(spouseName)) {
+                                    // Add spouse node (not connected to grandparents, just to uncle/aunt)
+                                    const spouseNode = graph.addNode([uncleName], spouseName, FAMILY_GROUPS.UNCLE_AUNT);
+                                    console.log(`Added spouse: ${spouseName} connected to ${uncleName}`);
+                                    
+                                    // Store spouse relationship too
+                                    familyRelations.uncles.set(spouseName, parentSide);
+                                } else {
+                                    // If spouse already exists, just connect them
+                                    graph.addLink(uncleName, spouseName);
+                                    console.log(`Connected existing person ${spouseName} as spouse to ${uncleName}`);
+                                }
+                            }
+                        }
+                    }
+                ]
+            );
+        });
+        
+        // Add cousin
+        document.getElementById('add-cousin').addEventListener('click', () => {
+            // Check if uncles/aunts exist
+            const uncleAunts = new Map();
+            
+            // Find all uncles/aunts in the graph
+            graph.data.nodes.forEach(node => {
+                if (node.group === FAMILY_GROUPS.UNCLE_AUNT) {
+                    uncleAunts.set(node.id, node);
+                }
+            });
+            
+            if (uncleAunts.size === 0) {
+                alert('Please add an uncle or aunt first!');
+                return;
+            }
+            
+            // Map to store uncle/aunt -> spouse relationships
+            const spouseMap = new Map();
+            
+            // Find spouse relationships among uncles/aunts
+            graph.data.links.forEach(link => {
+                const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+                const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+                
+                // Check if both nodes are uncles/aunts
+                if (uncleAunts.has(sourceId) && uncleAunts.has(targetId)) {
+                    // Add bidirectional spouse relationship
+                    if (!spouseMap.has(sourceId)) {
+                        spouseMap.set(sourceId, []);
+                    }
+                    if (!spouseMap.has(targetId)) {
+                        spouseMap.set(targetId, []);
+                    }
+                    
+                    spouseMap.get(sourceId).push(targetId);
+                    spouseMap.get(targetId).push(sourceId);
+                }
+            });
+            
+            // Create parent selector options - prioritize pairs over individuals
+            const uncleNames = Array.from(uncleAunts.keys());
+            
+            // Group parents into singles and couples for better organization
+            const couples = new Set(); // Track which uncles/aunts are part of displayed couples
+            const parentOptions = [];
+            
+            // First add coupled uncles/aunts
+            uncleNames.forEach(uncle => {
+                const spouses = spouseMap.get(uncle) || [];
+                
+                if (spouses.length > 0 && !couples.has(uncle)) {
+                    // For each uncle with spouse(s), add as a couple option
+                    spouses.forEach(spouse => {
+                        // Make sure we don't add the same couple twice in reverse order
+                        if (!couples.has(spouse)) {
+                            parentOptions.push({
+                                value: JSON.stringify([uncle, spouse]),
+                                text: `${uncle} & ${spouse} (Couple)`
+                            });
+                            
+                            // Mark both as part of a displayed couple
+                            couples.add(uncle);
+                            couples.add(spouse);
+                        }
+                    });
+                }
+            });
+            
+            // Then add single uncles/aunts who aren't part of a couple
+            uncleNames.forEach(uncle => {
+                if (!couples.has(uncle)) {
+                    parentOptions.push({
+                        value: JSON.stringify([uncle]),
+                        text: `${uncle} (Single)`
+                    });
+                }
+            });
+            
+            const parentSelect = dialogs.createSelect("Choose Parents:", parentOptions, 'parent-select');
+            const cousinInput = dialogs.createInput("Cousin's Name:", 'text', 'cousin-name');
+            
+            const content = document.createElement('div');
+            content.appendChild(parentSelect.container);
+            content.appendChild(cousinInput.container);
+            
+            dialogs.createModal(
+                "Add Cousin",
+                content,
+                [
+                    {
+                        text: "Cancel",
+                        primary: false
+                    },
+                    {
+                        text: "Add",
+                        primary: true,
+                        onClick: () => {
+                            // Parse the selected parents (could be one or two)
+                            const parentIds = JSON.parse(parentSelect.select.value);
+                            const cousinName = cousinInput.input.value.trim();
+                            
+                            if (!cousinName) {
+                                alert("Please enter a name");
+                                return;
+                            }
+                            
+                            if (familyRelations.cousins.has(cousinName)) {
+                                alert(`Cousin ${cousinName} already exists!`);
+                                return;
+                            }
+                            
+                            // Add cousin connected to the selected parent(s)
+                            const cousinNode = graph.addNode(parentIds, cousinName, FAMILY_GROUPS.COUSIN);
+                            
+                            // Store the relationship to all parents
+                            parentIds.forEach(parentId => {
+                                if (!familyRelations.cousins.has(cousinName)) {
+                                    familyRelations.cousins.set(cousinName, parentId);
+                                }
+                            });
+                            
+                            if (parentIds.length === 1) {
+                                console.log(`Added cousin: ${cousinName} as child of ${parentIds[0]}`);
+                            } else {
+                                console.log(`Added cousin: ${cousinName} as child of couple: ${parentIds.join(' & ')}`);
+                            }
+                        }
+                    }
+                ]
+            );
+        });
+
+        // Add grandparents
+        document.getElementById('add-grandparents').addEventListener('click', () => {
+            // Check if parents exist
+            if (familyRelations.parents.size === 0) {
+                alert('Please add parents first!');
+                return;
+            }
+            
+            const parentIds = Array.from(familyRelations.parents.keys());
+            
+            // Check which parent's grandparents already exist
+            const existingGrandparentSets = new Map();
+            
+            for (const parentId of parentIds) {
+                // Get all nodes connected to this parent
+                const connections = [];
+                graph.data.links.forEach(link => {
+                    const sourceId = link.source.id || link.source;
+                    const targetId = link.target.id || link.target;
+                    
+                    if (sourceId === parentId) {
+                        connections.push(targetId);
+                    } else if (targetId === parentId) {
+                        connections.push(sourceId);
+                    }
+                });
+                
+                // Count how many connections are grandparents
+                let grandparentCount = 0;
+                connections.forEach(id => {
+                    const node = graph.data.nodes.find(n => n.id === id);
+                    if (node && node.group === FAMILY_GROUPS.GRANDPARENT) {
+                        grandparentCount++;
+                    }
+                });
+                
+                // Store how many grandparents this parent has
+                existingGrandparentSets.set(parentId, grandparentCount);
+            }
+            
+            // Filter to only parents that don't already have 2 grandparents
+            const availableParents = parentIds.filter(id => existingGrandparentSets.get(id) < 2);
+            
+            if (availableParents.length === 0) {
+                alert('All parents already have complete sets of grandparents!');
+                return;
+            }
+            
+            // Create parent selector options
+            const parentOptions = availableParents.map(name => {
+                return { value: name, text: `${name}'s parents` };
+            });
+            
+            const parentSelect = dialogs.createSelect("Whose parents:", parentOptions, 'parent-select');
+            const grandfatherInput = dialogs.createInput("Grandfather's Name:", 'text', 'grandfather-name');
+            const grandmotherInput = dialogs.createInput("Grandmother's Name:", 'text', 'grandmother-name');
+            
+            const content = document.createElement('div');
+            content.appendChild(parentSelect.container);
+            content.appendChild(grandfatherInput.container);
+            content.appendChild(grandmotherInput.container);
+            
+            dialogs.createModal(
+                "Add Grandparents",
+                content,
+                [
+                    {
+                        text: "Cancel",
+                        primary: false
+                    },
+                    {
+                        text: "Add",
+                        primary: true,
+                        onClick: () => {
+                            const parentSide = parentSelect.select.value;
+                            const grandfatherName = grandfatherInput.input.value.trim();
+                            const grandmotherName = grandmotherInput.input.value.trim();
+                            
+                            if (!grandfatherName || !grandmotherName) {
+                                alert("Please enter both names");
+                                return;
+                            }
+                            
+                            // Add grandfather connected to selected parent
+                            const grandfatherNode = graph.addNode([parentSide], grandfatherName, FAMILY_GROUPS.GRANDPARENT);
+                            
+                            // Add grandmother connected to selected parent
+                            const grandmotherNode = graph.addNode([parentSide], grandmotherName, FAMILY_GROUPS.GRANDPARENT);
+                            
+                            // Connect grandparents to each other
+                            graph.addLink(grandfatherName, grandmotherName);
+                            
+                            console.log(`Added grandparents: ${grandfatherName} and ${grandmotherName} as parents of ${parentSide}`);
+                        }
+                    }
+                ]
+            );
+        });
+        
+        // Add child
+        document.getElementById('add-child').addEventListener('click', () => {
+            // Get all existing nodes as potential parents
+            const potentialParents = graph.data.nodes.map(node => ({
+                id: node.id,
+                group: node.group
+            }));
+            
+            // Create parent selector options
+            const parentOptions = potentialParents.map(node => {
+                return { value: node.id, text: `${node.id} (${GROUP_NAMES[node.group] || 'Unknown'})` };
+            });
+            
+            const parentSelect = dialogs.createSelect("Parent:", parentOptions, 'parent-select');
+            const childInput = dialogs.createInput("Child's Name:", 'text', 'child-name');
+            const otherParentInput = dialogs.createInput("Other Parent's Name (optional):", 'text', 'other-parent-name');
+            
+            const content = document.createElement('div');
+            content.appendChild(parentSelect.container);
+            content.appendChild(childInput.container);
+            content.appendChild(otherParentInput.container);
+            
+            dialogs.createModal(
+                "Add Child",
+                content,
+                [
+                    {
+                        text: "Cancel",
+                        primary: false
+                    },
+                    {
+                        text: "Add",
+                        primary: true,
+                        onClick: () => {
+                            const parentId = parentSelect.select.value;
+                            const childName = childInput.input.value.trim();
+                            const otherParentName = otherParentInput.input.value.trim();
+                            
+                            if (!childName) {
+                                alert("Please enter child's name");
+                                return;
+                            }
+                            
+                            // Add child connected to selected parent
+                            const childNode = graph.addNode([parentId], childName, FAMILY_GROUPS.CHILD);
+                            
+                            // If other parent specified, add them and connect
+                            if (otherParentName) {
+                                if (!graph.hasNode(otherParentName)) {
+                                    // Add other parent
+                                    // Determine appropriate group for other parent
+                                    let otherParentGroup = FAMILY_GROUPS.PARENT;
+                                    
+                                    // If this is not YOU, the other parent should have the same group
+                                    // as the parent we're adding to, since they're a couple
+                                    if (parentId !== 'YOU') {
+                                        const parentNode = graph.data.nodes.find(node => node.id === parentId);
+                                        if (parentNode) {
+                                            otherParentGroup = parentNode.group;
+                                        }
+                                    }
+                                    
+                                    const otherParent = graph.addNode([parentId], otherParentName, otherParentGroup);
+                                    
+                                    // Connect to the selected parent
+                                    graph.addLink(parentId, otherParentName);
+                                } else {
+                                    // If other parent already exists, just connect them
+                                    if (!graph.data.links.some(link => 
+                                        (link.source.id === parentId && link.target.id === otherParentName) ||
+                                        (link.source.id === otherParentName && link.target.id === parentId)
+                                    )) {
+                                        graph.addLink(parentId, otherParentName);
+                                    }
+                                }
+                                
+                                // Connect child to other parent
+                                graph.addLink(childName, otherParentName);
+                            }
+                            
+                            console.log(`Added child: ${childName} to parent: ${parentId}${otherParentName ? ' and ' + otherParentName : ''}`);
+                        }
+                    }
+                ]
+            );
+        });
+        
+        // Add niece/nephew (child of a sibling)
+        document.getElementById('add-niece-nephew').addEventListener('click', () => {
+            // Check if siblings exist
+            const siblingNodes = new Map();
+            
+            // Find all siblings in the graph
+            graph.data.nodes.forEach(node => {
+                if (node.group === FAMILY_GROUPS.SIBLING) {
+                    siblingNodes.set(node.id, node);
+                }
+            });
+            
+            if (siblingNodes.size === 0) {
+                alert('Please add siblings first!');
+                return;
+            }
+            
+            // Map to store sibling -> spouse relationships
+            const spouseMap = new Map();
+            
+            // Find spouse relationships among siblings
+            graph.data.links.forEach(link => {
+                const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+                const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+                
+                // Check if both nodes are siblings
+                if (siblingNodes.has(sourceId) && siblingNodes.has(targetId)) {
+                    // Add bidirectional spouse relationship
+                    if (!spouseMap.has(sourceId)) {
+                        spouseMap.set(sourceId, []);
+                    }
+                    if (!spouseMap.has(targetId)) {
+                        spouseMap.set(targetId, []);
+                    }
+                    
+                    spouseMap.get(sourceId).push(targetId);
+                    spouseMap.get(targetId).push(sourceId);
+                }
+            });
+            
+            // Create parent selector options - prioritize pairs over individuals
+            const siblingNames = Array.from(siblingNodes.keys());
+            
+            // Group parents into singles and couples for better organization
+            const couples = new Set(); // Track which siblings are part of displayed couples
+            const parentOptions = [];
+            
+            // First add coupled siblings
+            siblingNames.forEach(sibling => {
+                const spouses = spouseMap.get(sibling) || [];
+                
+                if (spouses.length > 0 && !couples.has(sibling)) {
+                    // For each sibling with spouse(s), add as a couple option
+                    spouses.forEach(spouse => {
+                        // Make sure we don't add the same couple twice in reverse order
+                        if (!couples.has(spouse)) {
+                            parentOptions.push({
+                                value: JSON.stringify([sibling, spouse]),
+                                text: `${sibling} & ${spouse} (Couple)`
+                            });
+                            
+                            // Mark both as part of a displayed couple
+                            couples.add(sibling);
+                            couples.add(spouse);
+                        }
+                    });
+                }
+            });
+            
+            // Then add single siblings who aren't part of a couple
+            siblingNames.forEach(sibling => {
+                if (!couples.has(sibling)) {
+                    parentOptions.push({
+                        value: JSON.stringify([sibling]),
+                        text: `${sibling} (Single)`
+                    });
+                }
+            });
+            
+            const parentSelect = dialogs.createSelect("Choose Parents:", parentOptions, 'parent-select');
+            const nieceNephewInput = dialogs.createInput("Niece/Nephew's Name:", 'text', 'niece-nephew-name');
+            
+            const content = document.createElement('div');
+            content.appendChild(parentSelect.container);
+            content.appendChild(nieceNephewInput.container);
+            
+            dialogs.createModal(
+                "Add Niece/Nephew",
+                content,
+                [
+                    {
+                        text: "Cancel",
+                        primary: false
+                    },
+                    {
+                        text: "Add",
+                        primary: true,
+                        onClick: () => {
+                            // Parse the selected parents (could be one or two)
+                            const parentIds = JSON.parse(parentSelect.select.value);
+                            const nieceNephewName = nieceNephewInput.input.value.trim();
+                            
+                            if (!nieceNephewName) {
+                                alert("Please enter a name");
+                                return;
+                            }
+                            
+                            // Add niece/nephew connected to the selected parent(s)
+                            const nieceNephewNode = graph.addNode(parentIds, nieceNephewName, FAMILY_GROUPS.NIECE_NEPHEW);
+                            
+                            if (parentIds.length === 1) {
+                                console.log(`Added niece/nephew: ${nieceNephewName} as child of ${parentIds[0]}`);
+                            } else {
+                                console.log(`Added niece/nephew: ${nieceNephewName} as child of couple: ${parentIds.join(' & ')}`);
+                            }
+                        }
+                    }
+                ]
+            );
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            graph.width = window.innerWidth;
+            graph.height = window.innerHeight;
+            graph.svg
+                .attr('width', graph.width)
+                .attr('height', graph.height);
+            graph.simulation.force('center', d3.forceCenter(graph.width / 2, graph.height / 2));
+            graph.simulation.alpha(0.3).restart();
+        });
+
+        // Function to save the family tree as an image
+        function saveAsImage() {
+            const nodeInfo = document.getElementById('node-info');
+            
+            // First hide the controls and info panels for cleaner capture
+            const controls = document.getElementById('controls');
+            const legend = document.querySelector('.family-legend');
+            const info = document.getElementById('info');
+            
+            // Store original display values
+            const controlsDisplay = controls.style.display;
+            const legendDisplay = legend.style.display;
+            const infoDisplay = info.style.display;
+            
+            // Temporarily hide UI elements
+            controls.style.display = 'none';
+            legend.style.display = 'none';
+            info.style.display = 'none';
+            
+            // Create a temporary div for the title
+            const titleDiv = document.createElement('div');
+            titleDiv.innerHTML = '<h1 style="text-align:center;color:#3f51b5;margin:10px;">My Family Tree</h1>';
+            titleDiv.style.position = 'absolute';
+            titleDiv.style.top = '10px';
+            titleDiv.style.left = '0';
+            titleDiv.style.right = '0';
+            titleDiv.style.zIndex = '1000';
+            document.body.appendChild(titleDiv);
+            
+            // Use html2canvas to capture the SVG and convert to image
+            try {
+                // Show a message that we're preparing the image
+                if (nodeInfo) {
+                    nodeInfo.innerHTML = '<strong>Preparing image...</strong>';
+                }
+                
+                // Wait a bit for any transitions to complete
+                setTimeout(() => {
+                    const svgElement = document.querySelector('svg');
+                    
+                    // Use SVG serialization for better quality
+                    const svgData = new XMLSerializer().serializeToString(svgElement);
+                    const svgBlob = new Blob([svgData], {type: 'image/svg+xml;charset=utf-8'});
+                    const url = URL.createObjectURL(svgBlob);
+                    
+                    // Create an image from the SVG
+                    const img = new Image();
+                    img.onload = function() {
+                        // Create a canvas to draw the image
+                        const canvas = document.createElement('canvas');
+                        canvas.width = window.innerWidth;
+                        canvas.height = window.innerHeight;
+                        const ctx = canvas.getContext('2d');
+                        
+                        // Fill with white background
+                        ctx.fillStyle = 'white';
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        
+                        // Draw the image
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        
+                        // Convert to PNG
+                        const imgURL = canvas.toDataURL('image/png');
+                        
+                        // Create a download link
+                        const downloadLink = document.createElement('a');
+                        downloadLink.download = 'family-tree.png';
+                        downloadLink.href = imgURL;
+                        downloadLink.click();
+                        
+                        // Clean up
+                        URL.revokeObjectURL(url);
+                        
+                        // Restore UI elements
+                        controls.style.display = controlsDisplay;
+                        legend.style.display = legendDisplay;
+                        info.style.display = infoDisplay;
+                        document.body.removeChild(titleDiv);
+                        
+                        // Show completion message
+                        if (nodeInfo) {
+                            nodeInfo.innerHTML = '<strong>Image saved!</strong>';
+                            setTimeout(() => {
+                                if (nodeInfo.innerHTML.includes('Image saved')) {
+                                    nodeInfo.innerHTML = '';
+                                }
+                            }, 3000);
+                        }
+                    };
+                    
+                    // Handle loading errors
+                    img.onerror = function() {
+                        // Restore UI elements
+                        controls.style.display = controlsDisplay;
+                        legend.style.display = legendDisplay;
+                        info.style.display = infoDisplay;
+                        document.body.removeChild(titleDiv);
+                        
+                        if (nodeInfo) {
+                            nodeInfo.innerHTML = '<strong style="color:red">Error saving image</strong>';
+                            setTimeout(() => {
+                                if (nodeInfo.innerHTML.includes('Error saving')) {
+                                    nodeInfo.innerHTML = '';
+                                }
+                            }, 3000);
+                        }
+                    };
+                    
+                    // Load the SVG as an image
+                    img.src = url;
+                }, 200);
+                
+            } catch (error) {
+                console.error('Error saving image:', error);
+                
+                // Restore UI elements
+                controls.style.display = controlsDisplay;
+                legend.style.display = legendDisplay;
+                info.style.display = infoDisplay;
+                if (document.body.contains(titleDiv)) {
+                    document.body.removeChild(titleDiv);
+                }
+                
+                if (nodeInfo) {
+                    nodeInfo.innerHTML = '<strong style="color:red">Error saving image</strong>';
+                    setTimeout(() => {
+                        if (nodeInfo.innerHTML.includes('Error saving')) {
+                            nodeInfo.innerHTML = '';
+                        }
+                    }, 3000);
+                }
+            }
+        }
+
+        // Function to lock all node positions
+        function lockGraphPositions() {
+            // Update node info to show action in progress
+            const nodeInfo = document.getElementById('node-info');
+            if (nodeInfo) {
+                nodeInfo.innerHTML = '<strong>Locking graph positions...</strong>';
+            }
+            
+            // Use the graph class's lock method
+            graph.lockPositions();
+            
+            // Update the node info after a delay
+            setTimeout(() => {
+                if (nodeInfo && nodeInfo.innerHTML.includes('Locking graph')) {
+                    nodeInfo.innerHTML = '<strong>Graph locked!</strong>';
+                    
+                    // Clear the message after 2 seconds
+                    setTimeout(() => {
+                        if (nodeInfo.innerHTML.includes('Graph locked')) {
+                            nodeInfo.innerHTML = '';
+                        }
+                    }, 2000);
+                }
+            }, 500);
+        }
+
+        // Function to unlock node positions (previously resetNodePositions)
+        function unlockGraphPositions() {
+            // Update node info to show action in progress
+            const nodeInfo = document.getElementById('node-info');
+            if (nodeInfo) {
+                nodeInfo.innerHTML = '<strong>Unlocking graph positions...</strong>';
+            }
+            
+            // Use the graph class's unlock method
+            graph.unlockPositions();
+            
+            // Update the node info after a delay
+            setTimeout(() => {
+                if (nodeInfo && nodeInfo.innerHTML.includes('Unlocking graph')) {
+                    nodeInfo.innerHTML = '<strong>Graph unlocked!</strong>';
+                    
+                    // Clear the message after 2 seconds
+                    setTimeout(() => {
+                        if (nodeInfo.innerHTML.includes('Graph unlocked')) {
+                            nodeInfo.innerHTML = '';
+                        }
+                    }, 2000);
+                }
+            }, 500);
+        }
+    </script>
+</body>
+
+</html> 

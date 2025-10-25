@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@guinetik/network-js - Network Analysis Made Simple</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+
+        .card-hover:hover {
+            transform: translateY(-4px);
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Hero Section -->
+    <div class="gradient-bg text-white">
+        <div class="max-w-7xl mx-auto px-4 py-16 sm:px-6 lg:px-8">
+            <div class="text-center">
+                <h1 class="text-5xl font-extrabold mb-4">
+                    📊 @guinetik/network-js
+                </h1>
+                <p class="text-2xl mb-2 text-purple-100">
+                    Network Analysis Made Simple
+                </p>
+                <p class="text-lg text-purple-200 max-w-2xl mx-auto mb-8">
+                    A lightweight, zero-dependency JavaScript library for analyzing graphs and networks.
+                    From social networks to family trees, understand your connected data with ease.
+                </p>
+                <div class="flex gap-4 justify-center">
+                    <a href="examples/network-graph.html" class="bg-white text-purple-600 px-8 py-3 rounded-lg font-semibold hover:bg-purple-50 transition-colors">
+                        🚀 See It in Action
+                    </a>
+                    <a href="https://github.com/guinetik/js-network-stats" target="_blank" class="border-2 border-white px-8 py-3 rounded-lg font-semibold hover:bg-white hover:text-purple-600 transition-colors">
+                        📚 View on GitHub
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="max-w-7xl mx-auto px-4 py-12 sm:px-6 lg:px-8">
+
+        <!-- What is Network Analysis? -->
+        <div class="bg-white rounded-lg shadow-lg p-8 mb-8">
+            <h2 class="text-3xl font-bold mb-4 text-gray-900">🤔 What is Network Analysis?</h2>
+            <div class="prose max-w-none text-gray-700">
+                <p class="mb-4">
+                    Network analysis is the study of relationships between entities. Think of it like mapping friendships
+                    on social media, understanding protein interactions in biology, or analyzing traffic patterns in cities.
+                </p>
+                <div class="grid md:grid-cols-3 gap-4 mt-6">
+                    <div class="bg-blue-50 p-4 rounded-lg">
+                        <div class="text-3xl mb-2">👥</div>
+                        <h4 class="font-bold mb-1">Social Networks</h4>
+                        <p class="text-sm">Who influences whom? Find the most connected people in your community.</p>
+                    </div>
+                    <div class="bg-green-50 p-4 rounded-lg">
+                        <div class="text-3xl mb-2">🌳</div>
+                        <h4 class="font-bold mb-1">Family Trees</h4>
+                        <p class="text-sm">Map relationships between family members across generations.</p>
+                    </div>
+                    <div class="bg-purple-50 p-4 rounded-lg">
+                        <div class="text-3xl mb-2">🔗</div>
+                        <h4 class="font-bold mb-1">Connected Data</h4>
+                        <p class="text-sm">Any data with relationships: citation networks, transportation, collaboration graphs.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Key Metrics Explained -->
+        <div class="bg-white rounded-lg shadow-lg p-8 mb-8">
+            <h2 class="text-3xl font-bold mb-4 text-gray-900">📈 Metrics We Calculate</h2>
+            <p class="text-gray-600 mb-6">Our library computes six key centrality measures to help you understand your network:</p>
+
+            <div class="space-y-4">
+                <div class="border-l-4 border-blue-500 pl-4 py-2">
+                    <h3 class="font-bold text-lg mb-1">🎯 Degree Centrality</h3>
+                    <p class="text-gray-600">
+                        The simplest measure: how many connections does each node have?
+                        <span class="text-sm italic">Great for finding the most connected people.</span>
+                    </p>
+                </div>
+
+                <div class="border-l-4 border-green-500 pl-4 py-2">
+                    <h3 class="font-bold text-lg mb-1">⭐ Eigenvector Centrality</h3>
+                    <p class="text-gray-600">
+                        It's not just who you know, but <em>who they know</em>. Measures influence based on connection quality.
+                        <span class="text-sm italic">Think Google's PageRank algorithm!</span>
+                    </p>
+                </div>
+
+                <div class="border-l-4 border-purple-500 pl-4 py-2">
+                    <h3 class="font-bold text-lg mb-1">🌉 Betweenness Centrality</h3>
+                    <p class="text-gray-600">
+                        Who acts as a bridge between different groups? Identifies gatekeepers and connectors.
+                        <span class="text-sm italic">Find the critical links in your network.</span>
+                    </p>
+                </div>
+
+                <div class="border-l-4 border-orange-500 pl-4 py-2">
+                    <h3 class="font-bold text-lg mb-1">🔺 Clustering Coefficient</h3>
+                    <p class="text-gray-600">
+                        How "clique-like" is each neighborhood? Measures how well connected a node's friends are to each other.
+                        <span class="text-sm italic">High clustering = tight-knit communities.</span>
+                    </p>
+                </div>
+
+                <div class="border-l-4 border-pink-500 pl-4 py-2">
+                    <h3 class="font-bold text-lg mb-1">🏘️ Modularity (Louvain)</h3>
+                    <p class="text-gray-600">
+                        Automatically detects communities in your network using the Louvain algorithm.
+                        <span class="text-sm italic">Who naturally clusters together?</span>
+                    </p>
+                </div>
+
+                <div class="border-l-4 border-red-500 pl-4 py-2">
+                    <h3 class="font-bold text-lg mb-1">👥 Clique Detection</h3>
+                    <p class="text-gray-600">
+                        Finds complete subgraphs where everyone knows everyone.
+                        <span class="text-sm italic">Discover the tightest groups.</span>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Interactive Examples -->
+        <div class="mb-8">
+            <h2 class="text-3xl font-bold mb-6 text-gray-900">🎮 Interactive Examples</h2>
+
+            <div class="grid md:grid-cols-2 gap-6">
+                <!-- Network Graph Example -->
+                <a href="examples/network-graph.html" class="block group card-hover">
+                    <div class="h-full bg-white rounded-lg shadow-lg overflow-hidden border-2 border-transparent hover:border-blue-500">
+                        <div class="bg-gradient-to-br from-blue-500 to-purple-600 h-48 flex items-center justify-center">
+                            <div class="text-white text-6xl">🕸️</div>
+                        </div>
+                        <div class="p-6">
+                            <h3 class="text-xl font-bold mb-2 text-gray-900 group-hover:text-blue-600">
+                                Interactive Network Graph
+                            </h3>
+                            <p class="text-gray-600 mb-4">
+                                Add nodes, watch centrality scores update in real-time, and explore
+                                force-directed graph layouts with D3.js.
+                            </p>
+                            <div class="text-blue-600 font-semibold">
+                                Try it now →
+                            </div>
+                        </div>
+                    </div>
+                </a>
+
+                <!-- Family Tree Example -->
+                <a href="examples/family-tree.html" class="block group card-hover">
+                    <div class="h-full bg-white rounded-lg shadow-lg overflow-hidden border-2 border-transparent hover:border-green-500">
+                        <div class="bg-gradient-to-br from-green-500 to-emerald-600 h-48 flex items-center justify-center">
+                            <div class="text-white text-6xl">🌳</div>
+                        </div>
+                        <div class="p-6">
+                            <h3 class="text-xl font-bold mb-2 text-gray-900 group-hover:text-green-600">
+                                Family Tree Builder
+                            </h3>
+                            <p class="text-gray-600 mb-4">
+                                Build your family tree with parents, siblings, cousins, and more.
+                                Auto-saves to localStorage and exports as PNG.
+                            </p>
+                            <div class="text-green-600 font-semibold">
+                                Build your tree →
+                            </div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+        </div>
+
+        <!-- Getting Started -->
+        <div class="bg-white rounded-lg shadow-lg p-8 mb-8">
+            <h2 class="text-3xl font-bold mb-4 text-gray-900">🚀 Getting Started</h2>
+
+            <div class="mb-6">
+                <h3 class="text-xl font-bold mb-3">Installation</h3>
+                <pre class="bg-gray-900 text-green-400 p-4 rounded-lg overflow-x-auto"><code>npm install @guinetik/network-js</code></pre>
+            </div>
+
+            <div class="mb-6">
+                <h3 class="text-xl font-bold mb-3">Basic Usage</h3>
+                <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto text-sm"><code>import { NetworkStats } from '@guinetik/network-js';
+
+// Define your network
+const network = [
+  { source: 'Alice', target: 'Bob', weight: 1 },
+  { source: 'Bob', target: 'Charlie', weight: 2 },
+  { source: 'Charlie', target: 'Alice', weight: 1 }
+];
+
+// Analyze it
+const analyzer = new NetworkStats({ verbose: true });
+const results = analyzer.analyze(network, ['degree', 'eigenvector']);
+
+console.log(results);
+// [
+//   { id: 'Alice', degree: 2, eigenvector: 0.577 },
+//   { id: 'Bob', degree: 2, eigenvector: 0.577 },
+//   { id: 'Charlie', degree: 2, eigenvector: 0.577 }
+// ]</code></pre>
+            </div>
+
+            <div class="bg-blue-50 p-4 rounded-lg">
+                <h4 class="font-bold mb-2">💡 That's it!</h4>
+                <p class="text-sm text-gray-700">
+                    The library handles all the complex graph algorithms for you. No external dependencies,
+                    works in both Node.js and browsers, and provides detailed JSDoc documentation.
+                </p>
+            </div>
+        </div>
+
+        <!-- Features -->
+        <div class="bg-white rounded-lg shadow-lg p-8 mb-8">
+            <h2 class="text-3xl font-bold mb-6 text-gray-900">✨ Why @guinetik/network-js?</h2>
+
+            <div class="grid md:grid-cols-2 gap-6">
+                <div class="flex gap-4">
+                    <div class="text-3xl">🪶</div>
+                    <div>
+                        <h3 class="font-bold mb-1">Lightweight</h3>
+                        <p class="text-gray-600 text-sm">Zero dependencies (only uses @guinetik/logger). Keep your bundle small.</p>
+                    </div>
+                </div>
+
+                <div class="flex gap-4">
+                    <div class="text-3xl">📖</div>
+                    <div>
+                        <h3 class="font-bold mb-1">Well Documented</h3>
+                        <p class="text-gray-600 text-sm">Comprehensive JSDoc comments on every method and class.</p>
+                    </div>
+                </div>
+
+                <div class="flex gap-4">
+                    <div class="text-3xl">🎓</div>
+                    <div>
+                        <h3 class="font-bold mb-1">Academically Sound</h3>
+                        <p class="text-gray-600 text-sm">Implements classical algorithms from network science papers.</p>
+                    </div>
+                </div>
+
+                <div class="flex gap-4">
+                    <div class="text-3xl">🧪</div>
+                    <div>
+                        <h3 class="font-bold mb-1">Well Tested</h3>
+                        <p class="text-gray-600 text-sm">97%+ code coverage with Vitest. Reliable and production-ready.</p>
+                    </div>
+                </div>
+
+                <div class="flex gap-4">
+                    <div class="text-3xl">🌐</div>
+                    <div>
+                        <h3 class="font-bold mb-1">Universal</h3>
+                        <p class="text-gray-600 text-sm">Works in Node.js and browsers. ES modules with clean exports.</p>
+                    </div>
+                </div>
+
+                <div class="flex gap-4">
+                    <div class="text-3xl">⚡</div>
+                    <div>
+                        <h3 class="font-bold mb-1">Performant</h3>
+                        <p class="text-gray-600 text-sm">Optimized data structures (adjacency maps) for fast lookups.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tech Stack -->
+        <div class="bg-gradient-to-br from-slate-700 to-slate-900 rounded-lg shadow-lg p-8 text-white">
+            <h2 class="text-3xl font-bold mb-6">🛠️ Built With</h2>
+
+            <div class="grid md:grid-cols-3 gap-6">
+                <div>
+                    <div class="text-4xl mb-2">📐</div>
+                    <h3 class="font-bold mb-1">Graph Theory</h3>
+                    <p class="text-slate-300 text-sm">
+                        Classical algorithms: Eigenvector centrality (power iteration),
+                        Bron-Kerbosch (cliques), Louvain (communities).
+                    </p>
+                </div>
+
+                <div>
+                    <div class="text-4xl mb-2">🎨</div>
+                    <h3 class="font-bold mb-1">D3.js Visualization</h3>
+                    <p class="text-slate-300 text-sm">
+                        Interactive force-directed graphs for the examples.
+                        Zoom, pan, drag nodes around.
+                    </p>
+                </div>
+
+                <div>
+                    <div class="text-4xl mb-2">⚙️</div>
+                    <h3 class="font-bold mb-1">Modern JavaScript</h3>
+                    <p class="text-slate-300 text-sm">
+                        ES2022+, native modules, private fields, structuredClone.
+                        No transpilation needed.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-gray-300 mt-12">
+        <div class="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+            <div class="text-center">
+                <p class="mb-2">
+                    Made with 💜 by <a href="https://github.com/guinetik" target="_blank" class="text-purple-400 hover:text-purple-300">@guinetik</a>
+                </p>
+                <p class="text-sm text-gray-400">
+                    Open source under MIT License
+                </p>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>

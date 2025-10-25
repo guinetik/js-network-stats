@@ -1,0 +1,37 @@
+{
+  "name": "@guinetik/network-js",
+  "version": "1.0.0",
+  "description": "A nodejs micro package to help calculating stats for network graphs",
+  "main": "./src/index.js",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run --coverage",
+    "test:watch": "vitest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/guinetik/js-network-stats.git"
+  },
+  "keywords": [
+    "network-analysis",
+    "graph-theory",
+    "eigenvector-centrality",
+    "betweenness-centrality",
+    "modularity",
+    "community-detection",
+    "louvain-algorithm"
+  ],
+  "author": "guinetik",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/guinetik/js-network-stats/issues"
+  },
+  "homepage": "https://github.com/guinetik/js-network-stats#readme",
+  "dependencies": {
+    "@guinetik/logger": "^1.0.0"
+  },
+  "devDependencies": {
+    "vitest": "^0.34.6",
+    "@vitest/coverage-v8": "^0.34.6"
+  }
+}

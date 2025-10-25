@@ -1,0 +1,27 @@
+{
+  "name": "@guinetik/network-js-demos",
+  "version": "1.0.0",
+  "description": "Demonstration and examples for @guinetik/network-js library",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "runner": "node ./src/index.runner.js"
+  },
+  "keywords": [
+    "network-visualization",
+    "d3",
+    "graph-visualization",
+    "examples"
+  ],
+  "author": "guinetik",
+  "license": "MIT",
+  "dependencies": {
+    "@guinetik/network-js": "file:../network-js",
+    "d3": "^7.9.0"
+  },
+  "devDependencies": {
+    "vite": "^4.4.9"
+  }
+}
