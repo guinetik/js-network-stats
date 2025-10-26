@@ -1,0 +1,59 @@
+<div class="network-pattern">
+    <!-- Hero Section -->
+    <div class="relative py-20 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-4xl mx-auto text-center">
+            <h1 class="heading-xl mb-6" x-text="t.home.hero.title"></h1>
+            <p class="text-xl md:text-2xl text-secondary mb-4" x-text="t.home.hero.subtitle"></p>
+            <p class="text-lg text-secondary mb-8 max-w-2xl mx-auto" x-text="t.home.hero.description"></p>
+
+            <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                <button @click="navigate('/network')" class="btn-primary">
+                    🚀 <span x-text="t.home.hero.cta"></span>
+                </button>
+                <a href="https://github.com/guinetik/js-network-stats" target="_blank" class="btn-secondary">
+                    📚 <span x-text="t.home.hero.github"></span>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Features Grid -->
+    <div class="container-main section-spacing">
+        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <template x-for="(feature, index) in t.home.features" :key="index">
+                <div class="feature-card">
+                    <div class="text-4xl mb-4" x-text="feature.icon"></div>
+                    <h3 class="heading-sm mb-2" x-text="feature.title"></h3>
+                    <p class="text-secondary" x-text="feature.description"></p>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- Code Example -->
+    <div class="container-narrow section-spacing">
+        <div class="card overflow-hidden">
+            <div class="code-header">
+                <span class="text-gray-400 font-mono text-sm">Getting Started</span>
+                <div class="window-dots">
+                    <div class="window-dot-red"></div>
+                    <div class="window-dot-yellow"></div>
+                    <div class="window-dot-green"></div>
+                </div>
+            </div>
+            <pre class="bg-gray-900 text-gray-100 p-6 overflow-x-auto"><code class="text-sm">npm install @guinetik/network-js
+
+import { NetworkStats } from '@guinetik/network-js';
+
+const network = [
+  { source: 'Alice', target: 'Bob', weight: 1 },
+  { source: 'Bob', target: 'Charlie', weight: 2 }
+];
+
+const analyzer = new NetworkStats();
+const results = analyzer.analyze(network, ['degree', 'eigenvector']);
+
+console.log(results);</code></pre>
+        </div>
+    </div>
+</div>

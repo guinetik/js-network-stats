@@ -1,113 +1,306 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Interactive Network Graph - @guinetik/network-js</title>
-    <style>
-        .back-button {
-            position: fixed;
-            top: 10px;
-            right: 10px;
-            background: rgba(102, 126, 234, 0.9);
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 14px;
-            z-index: 101;
-            text-decoration: none;
-            display: inline-block;
+    <link rel="stylesheet" href="../styles/main.css">
+    <script>
+        // Detect dark mode from localStorage (same as main app)
+        if (localStorage.getItem('darkMode') === 'true') {
+            document.documentElement.classList.add('dark');
         }
-
-        .back-button:hover {
-            background: rgba(118, 75, 162, 0.9);
-        }
-    </style>
+    </script>
     <style>
-        body,
-        html {
+        body, html {
             margin: 0;
             padding: 0;
             width: 100%;
             height: 100%;
             overflow: hidden;
-            font-family: sans-serif;
         }
 
-        #controls {
+        #particles {
             position: fixed;
-            top: 10px;
-            left: 10px;
-            background: rgba(255, 255, 255, 0.8);
-            padding: 10px;
-            border-radius: 5px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            z-index: 100;
-        }
-
-        .button {
-            background: #4CAF50;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            margin: 5px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-
-        .button:hover {
-            background: #45a049;
-        }
-
-        #info {
-            position: fixed;
-            bottom: 0;
+            top: 0;
             left: 0;
-            right: 0;
-            background: white;
-            padding: 10px;
-            text-align: center;
-            font-size: 14px;
-            color: #666;
-            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
         }
 
-        #node-info {
-            margin-top: 10px;
-            font-size: 12px;
+        .content-wrapper {
+            position: relative;
+            z-index: 1;
         }
-        
-        .add-specific {
-            background: #3f51b5;
+
+        #graph-container {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.7) 0%, rgba(249, 250, 251, 0.7) 100%);
+            position: relative;
         }
-        
-        .add-specific:hover {
-            background: #303f9f;
+
+        .dark #graph-container {
+            background: linear-gradient(135deg, rgba(26, 26, 46, 0.9) 0%, rgba(22, 33, 62, 0.9) 100%);
+        }
+
+        #graph-container svg {
+            background: transparent;
         }
     </style>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
 </head>
+<body class="bg-gray-50 dark:bg-gray-900">
+    <!-- Network Particle Background -->
+    <canvas id="particles"></canvas>
+    <!-- Back Button -->
+    <a
+        href="../index.html"
+        class="fixed top-4 right-4 z-50 bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg shadow-lg transition-colors"
+    >
+        ← Back to Home
+    </a>
 
-<body>
-    <a href="../index.html" class="back-button">← Back to Home</a>
-    <div id="controls">
-        <button id="add-node" class="button">Add Random Node</button>
-        <button id="add-specific-node" class="button add-specific">Add Node to "Alice"</button>
-        <button id="remove-node" class="button">Remove Random Node</button>
-        <div id="node-info"></div>
-    </div>
+    <div class="content-wrapper">
+    <!-- Split Layout -->
+    <div class="flex flex-col lg:flex-row h-screen" x-data="networkGraphApp()">
+        <!-- Left Panel: Info & Controls -->
+        <div class="lg:w-1/3 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-r border-gray-200/50 dark:border-gray-700/50 overflow-y-auto p-6 space-y-6">
+            <!-- Header -->
+            <div>
+                <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+                    🕸️ Interactive Network Graph
+                </h1>
+                <p class="text-gray-600 dark:text-gray-400">
+                    Explore network analysis in real-time. Add nodes, remove them, and watch the centrality metrics update dynamically.
+                </p>
+            </div>
 
-    <div id="info">
-        Node size shows eigenvector centrality. Larger nodes are more influential.
-        Scroll to zoom, drag space to pan, drag nodes to move them!
+            <!-- What is this? -->
+            <div class="bg-blue-50 dark:bg-blue-900/30 rounded-lg p-4">
+                <h2 class="text-lg font-semibold text-blue-900 dark:text-blue-300 mb-2">What is this?</h2>
+                <p class="text-sm text-blue-800 dark:text-blue-200">
+                    This interactive visualization demonstrates <strong>eigenvector centrality</strong> -
+                    a measure of influence in a network. Node size represents importance: larger nodes
+                    are more influential because they're connected to other influential nodes.
+                </p>
+            </div>
+
+            <!-- Controls -->
+            <div class="space-y-3">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Controls</h2>
+
+                <button
+                    @click="addRandomNode()"
+                    class="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-semibold transition-colors shadow-sm"
+                >
+                    ➕ Add Random Node
+                </button>
+
+                <button
+                    @click="addSpecificNode()"
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-semibold transition-colors shadow-sm"
+                >
+                    🔗 Add Node to "Alice"
+                </button>
+
+                <button
+                    @click="removeRandomNode()"
+                    class="w-full bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg font-semibold transition-colors shadow-sm"
+                >
+                    ➖ Remove Random Node
+                </button>
+            </div>
+
+            <!-- Data Loading -->
+            <div class="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-4">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Load Data</h2>
+
+                <div class="space-y-2">
+                    <label for="data-select" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Choose Dataset:
+                    </label>
+                    <select
+                        x-model="selectedDataset"
+                        class="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                        <option value="default">Default (Simple)</option>
+                        <option value="karate-json">Karate Club - JSON (34 nodes)</option>
+                        <option value="karate-csv">Karate Club - CSV (34 nodes)</option>
+                        <option value="miserables">Les Misérables - CSV (77 nodes)</option>
+                    </select>
+                </div>
+
+                <button
+                    @click="loadData()"
+                    :disabled="isLoading"
+                    class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-4 py-3 rounded-lg font-semibold transition-colors shadow-sm"
+                >
+                    <span x-show="!isLoading">📊 Load Dataset</span>
+                    <span x-show="isLoading">⏳ Loading...</span>
+                </button>
+            </div>
+
+            <!-- Layout Controls -->
+            <div class="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-4">
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">Layout Algorithm</h2>
+
+                <div class="space-y-2">
+                    <label for="layout-select" class="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                        Choose Layout:
+                    </label>
+                    <select
+                        x-model="selectedLayout"
+                        class="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 px-3 py-2 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    >
+                        <option value="none">None (D3 Physics)</option>
+                        <option value="force-directed">Force-Directed</option>
+                        <option value="circular">Circular</option>
+                    </select>
+                </div>
+
+                <button
+                    @click="applyLayoutAlgorithm()"
+                    class="w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-3 rounded-lg font-semibold transition-colors shadow-sm"
+                >
+                    🎯 Apply Layout
+                </button>
+
+                <div class="bg-yellow-50 dark:bg-yellow-900/30 rounded-lg p-3">
+                    <p class="text-xs text-yellow-800 dark:text-yellow-200">
+                        <strong>None:</strong> D3's built-in physics simulation<br>
+                        <strong>Force-Directed:</strong> Custom spring-electrical model<br>
+                        <strong>Circular:</strong> Distance-based positioning
+                    </p>
+                </div>
+            </div>
+
+            <!-- Node Info (Alpine-powered reactive display) -->
+            <div id="node-info-container" class="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4">
+                <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Node Information</h3>
+                <div class="text-sm">
+                    <!-- Default state -->
+                    <template x-if="nodeInfo.type === 'default'">
+                        <div class="text-gray-600 dark:text-gray-400" x-text="nodeInfo.message"></div>
+                    </template>
+
+                    <!-- Loading state -->
+                    <template x-if="nodeInfo.type === 'loading'">
+                        <div class="space-y-1">
+                            <div class="text-blue-600 dark:text-blue-400"><strong>⏳ Loading...</strong></div>
+                            <div class="text-sm text-gray-600 dark:text-gray-400" x-text="nodeInfo.message"></div>
+                        </div>
+                    </template>
+
+                    <!-- Success state (dataset loaded) -->
+                    <template x-if="nodeInfo.type === 'success'">
+                        <div class="space-y-1">
+                            <div class="text-green-600 dark:text-green-400"><strong>✓</strong> <span x-text="nodeInfo.message"></span></div>
+                            <div class="text-sm text-gray-600 dark:text-gray-400">
+                                <span x-text="nodeInfo.details?.nodes"></span> nodes, <span x-text="nodeInfo.details?.edges"></span> edges
+                            </div>
+                            <div x-show="nodeInfo.details?.communities" class="text-xs text-purple-600 dark:text-purple-400 mt-2">
+                                🎨 Detected <span x-text="nodeInfo.details?.communities"></span> communities
+                            </div>
+                            <div x-show="nodeInfo.details?.description" class="text-xs text-gray-500 dark:text-gray-400 mt-2" x-text="nodeInfo.details?.description"></div>
+                        </div>
+                    </template>
+
+                    <!-- Error state -->
+                    <template x-if="nodeInfo.type === 'error'">
+                        <div class="text-red-600 dark:text-red-400">
+                            <strong>❌</strong> <span x-text="nodeInfo.message"></span>
+                        </div>
+                    </template>
+
+                    <!-- Node added -->
+                    <template x-if="nodeInfo.type === 'node-added'">
+                        <div>
+                            <p class="text-green-600 dark:text-green-400 font-semibold">✅ <span x-text="nodeInfo.message"></span></p>
+                            <p class="mt-2"><strong>ID:</strong> <span x-text="nodeInfo.details?.nodeId"></span></p>
+                            <p><strong>Connected to:</strong> <span x-text="nodeInfo.details?.connectedTo"></span></p>
+                            <p class="text-xs mt-2 text-gray-500">The graph will re-layout automatically</p>
+                        </div>
+                    </template>
+
+                    <!-- Node removed -->
+                    <template x-if="nodeInfo.type === 'node-removed'">
+                        <div>
+                            <p class="text-orange-600 dark:text-orange-400 font-semibold">🗑️ <span x-text="nodeInfo.message"></span></p>
+                            <p class="mt-2"><strong>ID:</strong> <span x-text="nodeInfo.details?.nodeId"></span></p>
+                            <p class="text-xs mt-2 text-gray-500">Connected edges were also removed</p>
+                        </div>
+                    </template>
+
+                    <!-- Layout applied -->
+                    <template x-if="nodeInfo.type === 'layout-applied'">
+                        <div class="space-y-1">
+                            <div class="text-green-600 dark:text-green-400"><strong>✓</strong> <span x-text="nodeInfo.message"></span></div>
+                            <div class="text-xs text-gray-500 dark:text-gray-400 mt-2" x-text="nodeInfo.details?.description"></div>
+                        </div>
+                    </template>
+
+                    <!-- Node hover (live node info) -->
+                    <template x-if="nodeInfo.type === 'node-hover'">
+                        <div class="space-y-1">
+                            <div class="text-blue-600 dark:text-blue-400 font-semibold">
+                                🔵 <span x-text="nodeInfo.details?.id"></span>
+                            </div>
+                            <div class="text-sm text-gray-700 dark:text-gray-300 space-y-0.5">
+                                <p><strong>Group:</strong> <span x-text="nodeInfo.details?.group"></span></p>
+                                <p><strong>Centrality:</strong> <span x-text="nodeInfo.details?.centrality"></span></p>
+                                <p><strong>Degree:</strong> <span x-text="nodeInfo.details?.degree"></span></p>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Instructions -->
+            <div class="bg-purple-50 dark:bg-purple-900/30 rounded-lg p-4">
+                <h3 class="text-sm font-semibold text-purple-900 dark:text-purple-300 mb-2">💡 How to interact</h3>
+                <ul class="text-sm text-purple-800 dark:text-purple-200 space-y-1">
+                    <li>🖱️ <strong>Drag nodes</strong> to reposition them</li>
+                    <li>🔍 <strong>Scroll</strong> to zoom in/out</li>
+                    <li>👆 <strong>Drag background</strong> to pan</li>
+                    <li>📊 <strong>Node size</strong> = eigenvector centrality</li>
+                    <li>🎨 <strong>Color</strong> = community group</li>
+                </ul>
+            </div>
+
+            <!-- Metrics Explanation -->
+            <div class="border-t border-gray-200 dark:border-gray-700 pt-4">
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">📈 About Eigenvector Centrality</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                    Unlike degree centrality (which just counts connections), eigenvector centrality
+                    measures <em>quality</em> of connections.
+                </p>
+                <p class="text-sm text-gray-600 dark:text-gray-400">
+                    Think of it like Google's PageRank: it's not just who you know, but
+                    <strong>who they know</strong>.
+                </p>
+            </div>
+        </div>
+
+        <!-- Right Panel: Graph Visualization -->
+        <div class="lg:w-2/3 relative" id="graph-container">
+            <!-- Graph will be rendered here by D3 -->
+        </div>
     </div>
 
     <script type="module">
+        import * as d3 from 'd3';
+        import Alpine from 'alpinejs';
         import NetworkGraph from '../src/networkgraph.d3.js';
+        import { initParticles } from '../js/particles.js';
+        import { createNetworkGraphApp } from '../js/network-graph.js';
 
-        // Initialize the network graph
+        // Make D3 available globally for NetworkGraph
+        window.d3 = d3;
+
+        // Make Alpine available globally
+        window.Alpine = Alpine;
+
+        // Initial data for the network graph
         const initialData = {
             nodes: [
                 { id: 'Alice', group: 1 },
@@ -150,86 +343,39 @@
             ]
         };
 
-        const graph = new NetworkGraph('body', window.innerWidth, window.innerHeight);
+        // Get container dimensions
+        const container = document.getElementById('graph-container');
+        const width = container.clientWidth;
+        const height = container.clientHeight;
+
+        // Initialize the network graph
+        const graph = new NetworkGraph('#graph-container', width, height);
         graph.setData(initialData.nodes, initialData.links);
-
-        // Set up button actions
-        document.getElementById('add-node').addEventListener('click', () => {
-            // Get the existing nodes
-            const existingNodes = graph.data.nodes;
-            if (existingNodes.length === 0) {
-                // If no nodes exist, just add one without connections
-                const newNode = graph.addNode([]);
-                console.log(`Added node: ${newNode.id} (no connections)`);
-                return;
-            }
-
-            // Decide how many connections to create (1-3)
-            const connectionCount = Math.floor(Math.random() * 3) + 1;
-            
-            // Select random nodes to connect to
-            const availableNodes = [...existingNodes];
-            const selectedNeighborIds = [];
-            
-            // Pick random nodes as neighbors, up to connectionCount
-            const maxConnections = Math.min(connectionCount, availableNodes.length);
-            for (let i = 0; i < maxConnections; i++) {
-                if (availableNodes.length === 0) break;
-                
-                const randomIndex = Math.floor(Math.random() * availableNodes.length);
-                const randomNode = availableNodes[randomIndex];
-                
-                selectedNeighborIds.push(randomNode.id);
-                
-                // Remove the selected node to avoid duplicates
-                availableNodes.splice(randomIndex, 1);
-            }
-            
-            // Add the new node with selected neighbors
-            const newNode = graph.addNode(selectedNeighborIds);
-            console.log(`Added node: ${newNode.id} with connections to: ${selectedNeighborIds.join(', ')}`);
-        });
-        
-        // Add a specific node connected to Alice
-        document.getElementById('add-specific-node').addEventListener('click', () => {
-            // Check if Alice exists
-            if (graph.hasNode('Alice')) {
-                const newNode = graph.addNode(['Alice']);
-                console.log(`Added node: ${newNode.id} connected to Alice`);
-            } else {
-                console.log('Alice node not found');
-                // Add a node connected to any available node
-                if (graph.data.nodes.length > 0) {
-                    const randomNodeId = graph.data.nodes[Math.floor(Math.random() * graph.data.nodes.length)].id;
-                    const newNode = graph.addNode([randomNodeId]);
-                    console.log(`Added node: ${newNode.id} connected to ${randomNodeId} (Alice not found)`);
-                } else {
-                    const newNode = graph.addNode([]);
-                    console.log(`Added node: ${newNode.id} with no connections (no nodes exist)`);
-                }
-            }
-        });
-
-        document.getElementById('remove-node').addEventListener('click', () => {
-            const removedId = graph.removeNode();
-            if (removedId) {
-                console.log(`Removed node: ${removedId}`);
-            } else {
-                console.log('No nodes to remove');
-            }
-        });
 
         // Handle window resize
         window.addEventListener('resize', () => {
-            graph.width = window.innerWidth;
-            graph.height = window.innerHeight;
-            graph.svg
-                .attr('width', graph.width)
-                .attr('height', graph.height);
-            graph.simulation.force('center', d3.forceCenter(graph.width / 2, graph.height / 2));
-            graph.simulation.alpha(0.3).restart();
+            const newWidth = container.clientWidth;
+            const newHeight = container.clientHeight;
+            graph.width = newWidth;
+            graph.height = newHeight;
+            graph.svg.attr('width', newWidth).attr('height', newHeight);
+            graph.simulation.force('center', d3.forceCenter(newWidth / 2, newHeight / 2));
+            graph.simulation.force('x', d3.forceX(newWidth / 2).strength(0.1));
+            graph.simulation.force('y', d3.forceY(newWidth / 2).strength(0.1));
         });
-    </script>
-</body>
 
+        // Dark mode is automatically handled by the d3Theme system in NetworkGraph
+        // No additional setup needed here!
+
+        // Register Alpine component
+        window.networkGraphApp = () => createNetworkGraphApp(graph, initialData);
+
+        // Start Alpine
+        Alpine.start();
+
+        // Initialize particle background
+        initParticles();
+    </script>
+    </div>
+</body>
 </html>

@@ -38,6 +38,20 @@ export class Graph {
   }
 
   /**
+   * Add a single node to the graph.
+   *
+   * @param {string|number} node - Node identifier to add
+   * @returns {Graph} The graph instance for chaining
+   * @example
+   * graph.addNode('A');
+   * graph.addNode(42);
+   */
+  addNode(node) {
+    this.nodes.add(node);
+    return this;
+  }
+
+  /**
    * Add multiple nodes to the graph.
    *
    * @param {Array<string|number>} nodes - Array of node identifiers to add
@@ -48,6 +62,58 @@ export class Graph {
   addNodesFrom(nodes) {
     nodes.forEach((node) => this.nodes.add(node));
     return this;
+  }
+
+  /**
+   * Remove a node and all its associated edges from the graph.
+   * Time complexity: O(V + E) in worst case where V is vertices and E is edges.
+   *
+   * @param {string|number} node - Node identifier to remove
+   * @returns {Graph} The graph instance for chaining
+   * @throws {Error} If node does not exist
+   * @example
+   * graph.addNode('A');
+   * graph.addEdge('A', 'B', 1);
+   * graph.removeNode('A'); // Removes 'A' and edge A-B
+   */
+  removeNode(node) {
+    if (!this.nodes.has(node)) {
+      throw new Error(`Node '${node}' does not exist in the graph`);
+    }
+
+    // Remove the node from the set
+    this.nodes.delete(node);
+
+    // Remove all edges connected to this node
+    this.edges = this.edges.filter(edge => !edge.hasNode(node));
+
+    // Remove from adjacency map
+    if (this.adjacencyMap.has(node)) {
+      // Get neighbors to clean up their adjacency lists
+      const neighbors = Array.from(this.adjacencyMap.get(node).keys());
+      neighbors.forEach(neighbor => {
+        if (this.adjacencyMap.has(neighbor)) {
+          this.adjacencyMap.get(neighbor).delete(node);
+        }
+      });
+      this.adjacencyMap.delete(node);
+    }
+
+    return this;
+  }
+
+  /**
+   * Check if a node exists in the graph.
+   *
+   * @param {string|number} node - Node identifier to check
+   * @returns {boolean} True if node exists, false otherwise
+   * @example
+   * graph.addNode('A');
+   * console.log(graph.hasNode('A')); // true
+   * console.log(graph.hasNode('Z')); // false
+   */
+  hasNode(node) {
+    return this.nodes.has(node);
   }
 
   /**
@@ -143,6 +209,166 @@ export class Graph {
    */
   getNodeList() {
     return Array.from(this.nodes);
+  }
+
+  /**
+   * Get the number of nodes in the graph.
+   * Time complexity: O(1)
+   *
+   * @returns {number} Number of nodes
+   * @example
+   * graph.addNodesFrom(['A', 'B', 'C']);
+   * console.log(graph.numberOfNodes()); // 3
+   */
+  numberOfNodes() {
+    return this.nodes.size;
+  }
+
+  /**
+   * Get the number of edges in the graph.
+   * Time complexity: O(1)
+   *
+   * @returns {number} Number of edges
+   * @example
+   * graph.addEdge('A', 'B');
+   * graph.addEdge('B', 'C');
+   * console.log(graph.numberOfEdges()); // 2
+   */
+  numberOfEdges() {
+    return this.edges.length;
+  }
+
+  /**
+   * Remove an edge between two nodes.
+   * Works for both (source, target) and (target, source) order.
+   *
+   * @param {string|number} source - Source node identifier
+   * @param {string|number} target - Target node identifier
+   * @returns {Graph} The graph instance for chaining
+   * @throws {Error} If edge does not exist
+   * @example
+   * graph.addEdge('A', 'B', 1);
+   * graph.removeEdge('A', 'B');
+   */
+  removeEdge(source, target) {
+    // Find the edge index
+    const edgeIndex = this.edges.findIndex(edge =>
+      edge.hasNode(source) && edge.hasNode(target)
+    );
+
+    if (edgeIndex === -1) {
+      throw new Error(`Edge between '${source}' and '${target}' does not exist`);
+    }
+
+    // Remove from edges array
+    this.edges.splice(edgeIndex, 1);
+
+    // Update adjacency map
+    if (this.adjacencyMap.has(source)) {
+      this.adjacencyMap.get(source).delete(target);
+    }
+    if (this.adjacencyMap.has(target)) {
+      this.adjacencyMap.get(target).delete(source);
+    }
+
+    return this;
+  }
+
+  /**
+   * Check if an edge exists between two nodes.
+   *
+   * @param {string|number} source - Source node identifier
+   * @param {string|number} target - Target node identifier
+   * @returns {boolean} True if edge exists, false otherwise
+   * @example
+   * graph.addEdge('A', 'B');
+   * console.log(graph.hasEdge('A', 'B')); // true
+   * console.log(graph.hasEdge('B', 'A')); // true (undirected)
+   * console.log(graph.hasEdge('A', 'C')); // false
+   */
+  hasEdge(source, target) {
+    return this.adjacencyMap.has(source) &&
+           this.adjacencyMap.get(source).has(target);
+  }
+
+  /**
+   * Get the weight of an edge between two nodes.
+   *
+   * @param {string|number} source - Source node identifier
+   * @param {string|number} target - Target node identifier
+   * @returns {number|null} Edge weight, or null if edge doesn't exist
+   * @example
+   * graph.addEdge('A', 'B', 2.5);
+   * console.log(graph.getEdgeWeight('A', 'B')); // 2.5
+   */
+  getEdgeWeight(source, target) {
+    if (!this.hasEdge(source, target)) {
+      return null;
+    }
+    return this.adjacencyMap.get(source).get(target);
+  }
+
+  /**
+   * Update the weight of an existing edge.
+   *
+   * @param {string|number} source - Source node identifier
+   * @param {string|number} target - Target node identifier
+   * @param {number} weight - New weight value
+   * @returns {Graph} The graph instance for chaining
+   * @throws {Error} If edge does not exist
+   * @example
+   * graph.addEdge('A', 'B', 1);
+   * graph.updateEdgeWeight('A', 'B', 2.5);
+   */
+  updateEdgeWeight(source, target, weight) {
+    if (!this.hasEdge(source, target)) {
+      throw new Error(`Edge between '${source}' and '${target}' does not exist`);
+    }
+
+    // Update adjacency map
+    this.adjacencyMap.get(source).set(target, weight);
+    this.adjacencyMap.get(target).set(source, weight);
+
+    // Update edges array
+    const edge = this.edges.find(e => e.hasNode(source) && e.hasNode(target));
+    if (edge) {
+      edge.weight = weight;
+    }
+
+    return this;
+  }
+
+  /**
+   * Get degree (number of neighbors) of a node.
+   *
+   * @param {string|number} node - Node identifier
+   * @returns {number} Degree of the node (0 if node doesn't exist)
+   * @example
+   * graph.addEdge('A', 'B');
+   * graph.addEdge('A', 'C');
+   * console.log(graph.degree('A')); // 2
+   */
+  degree(node) {
+    if (!this.adjacencyMap.has(node)) {
+      return 0;
+    }
+    return this.adjacencyMap.get(node).size;
+  }
+
+  /**
+   * Clear all nodes and edges from the graph.
+   *
+   * @returns {Graph} The graph instance for chaining
+   * @example
+   * graph.addNode('A');
+   * graph.clear();
+   * console.log(graph.numberOfNodes()); // 0
+   */
+  clear() {
+    this.nodes.clear();
+    this.edges = [];
+    this.adjacencyMap.clear();
+    return this;
   }
 }
 

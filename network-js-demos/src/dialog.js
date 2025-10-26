@@ -201,5 +201,87 @@ export class DialogForm {
     container.appendChild(select);
     return { container, select };
   }
+
+  /**
+   * Show a simple form dialog with input fields
+   *
+   * @param {string} title - Dialog title
+   * @param {Array} fields - Array of field objects {label, type, required, options}
+   * @returns {Promise<Array>} - Promise that resolves with array of input values
+   */
+  show(title, fields) {
+    return new Promise((resolve, reject) => {
+      // Create input fields
+      const inputs = [];
+      const fieldElements = fields.map((field, index) => {
+        let container, input;
+
+        // Handle select/dropdown fields
+        if (field.type === 'select' && field.options) {
+          const result = this.createSelect(
+            field.label,
+            field.options,
+            `field-${index}`
+          );
+          container = result.container;
+          input = result.select;
+        } else {
+          // Handle regular input fields
+          const result = this.createInput(
+            field.label,
+            field.type || 'text',
+            `field-${index}`,
+            ''
+          );
+          container = result.container;
+          input = result.input;
+        }
+
+        if (field.required) {
+          input.required = true;
+        }
+        inputs.push(input);
+        return container;
+      });
+
+      // Create actions
+      const actions = [
+        {
+          text: 'Cancel',
+          primary: false,
+          onClick: () => {
+            resolve(null);
+          },
+          closeOnClick: true
+        },
+        {
+          text: 'OK',
+          primary: true,
+          onClick: () => {
+            // Validate required fields
+            const allValid = inputs.every(input => {
+              if (input.required && !input.value.trim()) {
+                return false;
+              }
+              return true;
+            });
+
+            if (!allValid) {
+              alert('Please fill in all required fields');
+              return;
+            }
+
+            // Get values
+            const values = inputs.map(input => input.value.trim());
+            resolve(values);
+          },
+          closeOnClick: true
+        }
+      ];
+
+      // Create and show modal
+      this.createModal(title, fieldElements, actions);
+    });
+  }
 }
 export default DialogForm;

@@ -271,6 +271,29 @@ function getNetworkStats(network, features = null, options = {}) {
   return analyzer.analyze(network, features);
 }
 
+// Export core classes
+export { default as Graph } from './graph.js';
+export { Network } from './network.js';
+export { Louvain } from './louvain.js';
+
+// Export layout classes
+export { Layout, ForceDirectedLayout, CircularLayout } from './layouts/index.js';
+
+// Export adapters
+export {
+  Adapter,
+  CSVAdapter,
+  JSONAdapter,
+  NetworkXAdapter
+} from './adapters/index.js';
+
+// Export community detection
+export {
+  CommunityDetection,
+  CommunityAlgorithm,
+  LouvainAlgorithm
+} from './community/index.js';
+
 // Export functional wrapper (NetworkStats already exported above as class)
 export { getNetworkStats };
 export default getNetworkStats;

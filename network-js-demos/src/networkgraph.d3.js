@@ -1,5 +1,8 @@
+import { NetworkAdapter } from './network-adapter.js';
+import { d3Theme } from './d3-theme.js';
+
 export default class NetworkGraph {
-  constructor(containerId, width, height) {
+  constructor(containerId, width, height, options = {}) {
     this.width = width || window.innerWidth;
     this.height = height || window.innerHeight;
     this.container = d3.select(containerId || "body");
@@ -9,13 +12,58 @@ export default class NetworkGraph {
       links: [],
     };
 
-    this.nodeColors = d3.scaleOrdinal(d3.schemeCategory10);
+    // Use theme system for colors
+    this.theme = options.theme || d3Theme;
     this.nextId = 1;
     this.groups = {};
     this.nodeInfoCallback = null;
+    this.nodeInfoHideCallback = null;
+
+    // Initialize the network adapter (bridge to @guinetik/network-js)
+    this.adapter = new NetworkAdapter({
+      features: options.features || ['degree', 'eigenvector'],
+      verbose: options.verbose || false
+    });
 
     this.initSvg();
     this.initSimulation();
+    this.setupThemeListener();
+  }
+
+  /**
+   * Setup listener for theme changes
+   */
+  setupThemeListener() {
+    this.themeUnsubscribe = this.theme.onChange(() => {
+      this.applyTheme();
+    });
+  }
+
+  /**
+   * Apply current theme to all graph elements
+   */
+  applyTheme() {
+    if (this.nodeGroup) {
+      this.theme.applyNodeColors(this.nodeGroup.selectAll('circle'));
+    }
+    if (this.linkGroup) {
+      this.theme.applyLinkColors(this.linkGroup.selectAll('line'));
+    }
+    if (this.labelGroup) {
+      this.theme.applyTextColors(this.labelGroup.selectAll('text'));
+    }
+  }
+
+  /**
+   * Cleanup method to remove listeners
+   */
+  destroy() {
+    if (this.themeUnsubscribe) {
+      this.themeUnsubscribe();
+    }
+    if (this.simulation) {
+      this.simulation.stop();
+    }
   }
 
   initSvg() {
@@ -119,47 +167,18 @@ export default class NetworkGraph {
       .on("tick", () => this.updatePositions());
   }
 
+  /**
+   * Use the adapter to enrich nodes with network metrics
+   * This replaces the old manual centrality calculation
+   * @returns {Array} Nodes enriched with centrality and other metrics
+   */
   calculateCentrality() {
-    const N = this.data.nodes.length;
-    if (N === 0) return [];
+    if (this.data.nodes.length === 0) return [];
 
-    const adjacencyMatrix = Array(N)
-      .fill()
-      .map(() => Array(N).fill(0));
-    const nodeIndices = {};
+    // Use the adapter to compute metrics using @guinetik/network-js
+    const enrichedData = this.adapter.setData(this.data.nodes, this.data.links);
 
-    this.data.nodes.forEach((node, i) => {
-      nodeIndices[node.id] = i;
-    });
-
-    this.data.links.forEach((link) => {
-      const i = nodeIndices[link.source.id || link.source];
-      const j = nodeIndices[link.target.id || link.target];
-      if (i !== undefined && j !== undefined) {
-        adjacencyMatrix[i][j] = 1;
-        adjacencyMatrix[j][i] = 1;
-      }
-    });
-
-    // Power iteration for eigenvector centrality
-    let centralityVector = Array(N).fill(1 / N);
-    for (let iter = 0; iter < 50; iter++) {
-      const newVector = Array(N).fill(0);
-      for (let i = 0; i < N; i++) {
-        for (let j = 0; j < N; j++) {
-          newVector[i] += adjacencyMatrix[i][j] * centralityVector[j];
-        }
-      }
-      const norm = Math.sqrt(
-        newVector.reduce((sum, val) => sum + val * val, 0)
-      );
-      centralityVector = newVector.map((val) => (norm ? val / norm : 0));
-    }
-
-    return this.data.nodes.map((node, i) => ({
-      ...node,
-      centrality: centralityVector[i] || 0.1,
-    }));
+    return enrichedData.nodes;
   }
 
   resolveLinkNodeRefs() {
@@ -210,24 +229,17 @@ export default class NetworkGraph {
       .enter()
       .append("circle")
       .attr("r", d => 10 + d.centrality * 30)
-      .attr("fill", d => this.nodeColors(d.group))
-      .attr("stroke", "#fff")
-      .attr("stroke-width", 2)
       .call(this.drag())
       .on("mouseover", (event, d) => {
         this.showNodeInfo(d);
         // Add subtle highlight on hover
-        d3.select(event.currentTarget)
-          .attr("stroke", "#ff9800")
-          .attr("stroke-width", 3);
+        this.theme.applyNodeHover(d3.select(event.currentTarget));
       })
       .on("mouseout", (event, d) => {
         this.hideNodeInfo();
         // Remove highlight unless it's being dragged
         if (!d.isDragging) {
-          d3.select(event.currentTarget)
-            .attr("stroke", "#fff")
-            .attr("stroke-width", 2);
+          this.theme.resetNode(d3.select(event.currentTarget));
         }
       })
       .on("dblclick", (event, d) => {
@@ -235,6 +247,9 @@ export default class NetworkGraph {
         d.fy = null; // Release fixed Y position
         this.simulation.alpha(0.8).restart(); // Higher alpha for more movement
       });
+
+    // Apply theme colors to newly created nodes
+    this.theme.applyNodeColors(nodeEnter);
 
     // Merge existing and new nodes and update properties
     this.node = nodeEnter.merge(this.node)
@@ -255,10 +270,10 @@ export default class NetworkGraph {
     // Enter new links
     const linkEnter = this.link
       .enter()
-      .append("line")
-      .attr("stroke", "#999")
-      .attr("stroke-opacity", 0.6)
-      .attr("stroke-width", 2);
+      .append("line");
+
+    // Apply theme colors to newly created links
+    this.theme.applyLinkColors(linkEnter, { width: 2 });
 
     // Merge existing and new links
     this.link = linkEnter.merge(this.link);
@@ -270,21 +285,37 @@ export default class NetworkGraph {
 
     this.label.exit().remove();
 
-    this.label
+    const labelEnter = this.label
       .enter()
       .append("text")
       .text(d => d.id)
       .attr("font-size", "12px")
       .attr("dx", 15)
       .attr("dy", 4)
-      .attr("fill", "#333")
-      .style("pointer-events", "none")
-      .merge(this.label);
+      .style("pointer-events", "none");
+
+    // Apply theme colors to labels
+    this.theme.applyTextColors(labelEnter);
+
+    this.label = labelEnter.merge(this.label);
 
     // Update the simulation with the new nodes and links
     this.simulation.nodes(this.data.nodes);
-    this.simulation.force("link").links(this.data.links);
-    this.simulation.force("collision").initialize(this.data.nodes); // Reinitialize collision detection
+
+    // Check if link force exists (may be null if layout was applied)
+    const linkForce = this.simulation.force("link");
+    if (linkForce) {
+      linkForce.links(this.data.links);
+    } else {
+      // Recreate link force if it was disabled by layout
+      this.simulation.force("link", d3.forceLink(this.data.links).id(d => d.id).distance(100));
+    }
+
+    // Reinitialize collision detection
+    const collisionForce = this.simulation.force("collision");
+    if (collisionForce) {
+      collisionForce.initialize(this.data.nodes);
+    }
     
     // Initially place nodes at their positions to prevent jumps
     this.updatePositions();
@@ -388,61 +419,45 @@ export default class NetworkGraph {
       }
     });
     
-    // Highlight nodes
-    this.nodeGroup.selectAll("circle")
-      .attr("stroke-width", d => {
-        if (d.id === node.id) return 4; // Thicker stroke for the dragged node
-        if (connectedNodeIds.has(d.id)) return 3; // Medium stroke for connected nodes
-        return 1.5; // Normal stroke for other nodes
-      })
-      .attr("stroke", d => {
-        if (d.id === node.id) return "#ff5722"; // Orange for dragged node
-        if (connectedNodeIds.has(d.id)) return "#2196f3"; // Blue for connected nodes
-        return "#fff"; // White for other nodes
-      });
-      
-    // Highlight links
-    this.linkGroup.selectAll("line")
-      .attr("stroke-width", link => {
-        const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-        const targetId = typeof link.target === 'object' ? link.target.id : link.target;
-        
-        if (sourceId === node.id || targetId === node.id) {
-          return 3; // Thicker for connected links
-        }
-        return 1.5; // Normal for other links
-      })
-      .attr("stroke-opacity", link => {
-        const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-        const targetId = typeof link.target === 'object' ? link.target.id : link.target;
-        
-        if (sourceId === node.id || targetId === node.id) {
-          return 1.0; // Fully opaque for connected links
-        }
-        return 0.4; // Semi-transparent for other links
-      })
-      .attr("stroke", link => {
-        const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-        const targetId = typeof link.target === 'object' ? link.target.id : link.target;
-        
-        if (sourceId === node.id || targetId === node.id) {
-          return "#2196f3"; // Blue for connected links
-        }
-        return "#999"; // Gray for other links
-      });
+    // Highlight nodes using theme
+    this.nodeGroup.selectAll("circle").each((d, i, nodes) => {
+      const selection = d3.select(nodes[i]);
+      if (d.id === node.id) {
+        // Dragged node
+        this.theme.applyNodeDragging(selection);
+      } else if (connectedNodeIds.has(d.id)) {
+        // Connected nodes
+        this.theme.applyNodeConnected(selection);
+      } else {
+        // Other nodes - dim them
+        this.theme.resetNode(selection);
+        selection.attr("stroke-width", 1.5);
+      }
+    });
+
+    // Highlight links using theme
+    this.linkGroup.selectAll("line").each((link, i, lines) => {
+      const selection = d3.select(lines[i]);
+      const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+      const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+
+      if (sourceId === node.id || targetId === node.id) {
+        // Connected links
+        this.theme.applyLinkHighlight(selection);
+      } else {
+        // Other links - dim them
+        this.theme.resetLink(selection);
+        selection.attr("stroke-opacity", 0.4);
+      }
+    });
   }
   
   removeHighlights() {
-    // Reset node styling
-    this.nodeGroup.selectAll("circle")
-      .attr("stroke-width", 2)
-      .attr("stroke", "#fff");
-      
-    // Reset link styling
-    this.linkGroup.selectAll("line")
-      .attr("stroke-width", 1.5)
-      .attr("stroke-opacity", 0.6)
-      .attr("stroke", "#999");
+    // Reset node styling using theme
+    this.theme.resetNode(this.nodeGroup.selectAll("circle"));
+
+    // Reset link styling using theme
+    this.theme.resetLink(this.linkGroup.selectAll("line"));
   }
 
   showNodeInfo(node) {
@@ -451,15 +466,27 @@ export default class NetworkGraph {
       this.nodeInfoCallback(node);
     } else {
       // Default display
-      document.getElementById("node-info").innerHTML = `
-              <strong>${node.id}</strong> (Group: ${node.group})<br>
-              Centrality: ${node.centrality.toFixed(4)}
-          `;
+      const nodeInfoEl = document.getElementById("node-info");
+      if (nodeInfoEl) {
+        nodeInfoEl.innerHTML = `
+                <strong>${node.id}</strong> (Group: ${node.group})<br>
+                Centrality: ${node.centrality.toFixed(4)}
+            `;
+      }
     }
   }
 
   hideNodeInfo() {
-    document.getElementById("node-info").innerHTML = "";
+    if (this.nodeInfoHideCallback) {
+      // Use custom hide callback if provided
+      this.nodeInfoHideCallback();
+    } else {
+      // Default behavior - clear the element
+      const nodeInfoEl = document.getElementById("node-info");
+      if (nodeInfoEl) {
+        nodeInfoEl.innerHTML = "";
+      }
+    }
   }
 
   // Public API methods
@@ -777,5 +804,10 @@ export default class NetworkGraph {
   // Allow setting a custom node info callback
   set setNodeInfoCallback(callback) {
     this.nodeInfoCallback = callback;
+  }
+
+  // Allow setting a custom node info hide callback
+  set setNodeInfoHideCallback(callback) {
+    this.nodeInfoHideCallback = callback;
   }
 }
