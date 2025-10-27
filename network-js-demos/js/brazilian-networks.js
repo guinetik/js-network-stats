@@ -488,9 +488,18 @@ export function createBrazilianNetworksApp(graph) {
           break;
 
         case 'shell':
+          // Build nodeProperties map from visualization nodes if stats are available
+          const nodePropsMap = new Map();
+          graph.data.nodes.forEach(node => {
+            if (node.degree !== undefined) {
+              nodePropsMap.set(node.id, { degree: node.degree });
+            }
+          });
+
           layout = new ShellLayout(currentGraph, {
             scale: scale,
-            center: { x: width / 2, y: height / 2 }
+            center: { x: width / 2, y: height / 2 },
+            nodeProperties: nodePropsMap.size > 0 ? nodePropsMap : null
           });
           layoutName = 'Shell';
           break;

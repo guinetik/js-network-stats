@@ -57,6 +57,7 @@ export class ShellLayout extends Layout {
       center: { x: 0, y: 0 },
       nlist: null,
       rotate: null,
+      nodeProperties: null,  // Map of node ID -> {degree, ...properties}
       ...options
     }, {
       module: '../layouts/shell.js',
@@ -103,7 +104,8 @@ export async function shellCompute(graphData, options, progressCallback) {
     scale = 1,
     center = { x: 0, y: 0 },
     nlist = null,
-    rotate = null
+    rotate = null,
+    nodeProperties = null  // Map of node ID -> {degree, ...properties}
   } = options || {};
 
   // Handle edge cases
@@ -126,22 +128,35 @@ export async function shellCompute(graphData, options, progressCallback) {
     shells = nlist;
   } else {
     // Default: auto-group by degree (high degree = center, low degree = outer)
-    // Calculate degree for each node
-    const nodeDegrees = new Map();
-    nodes.forEach(node => {
-      nodeDegrees.set(node, 0);
-    });
+    // DRY principle: use pre-computed degree if available, otherwise compute from edges
 
-    // Count edges for each node
-    if (graphData.edges) {
-      for (const edge of graphData.edges) {
-        const source = edge[0];
-        const target = edge[1];
-        if (nodeDegrees.has(source)) {
-          nodeDegrees.set(source, nodeDegrees.get(source) + 1);
-        }
-        if (nodeDegrees.has(target)) {
-          nodeDegrees.set(target, nodeDegrees.get(target) + 1);
+    let nodeDegrees = new Map();
+
+    if (nodeProperties && nodeProperties.size > 0) {
+      // Use pre-computed degree from nodeProperties (passed from caller who has already computed it)
+      // This is the DRY approach - don't recompute what's already been calculated
+      nodes.forEach(node => {
+        const props = nodeProperties.get(node);
+        const degree = props && typeof props === 'object' ? (props.degree || 0) : 0;
+        nodeDegrees.set(node, degree);
+      });
+    } else {
+      // Fallback: compute degree from edges if no properties provided
+      nodes.forEach(node => {
+        nodeDegrees.set(node, 0);
+      });
+
+      // Count edges for each node
+      if (graphData.edges) {
+        for (const edge of graphData.edges) {
+          const source = edge.source !== undefined ? edge.source : edge[0];
+          const target = edge.target !== undefined ? edge.target : edge[1];
+          if (nodeDegrees.has(source)) {
+            nodeDegrees.set(source, nodeDegrees.get(source) + 1);
+          }
+          if (nodeDegrees.has(target)) {
+            nodeDegrees.set(target, nodeDegrees.get(target) + 1);
+          }
         }
       }
     }
@@ -149,7 +164,8 @@ export async function shellCompute(graphData, options, progressCallback) {
     // Group nodes by degree
     const degreeGroups = new Map();
     nodes.forEach(node => {
-      const degree = nodeDegrees.get(node);
+      const degree = nodeDegrees.get(node) || 0;
+
       if (!degreeGroups.has(degree)) {
         degreeGroups.set(degree, []);
       }
