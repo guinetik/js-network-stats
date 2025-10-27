@@ -96,7 +96,24 @@ export default KamadaKawaiLayout;
  * @returns {Object} Node ID -> { x, y }
  */
 export async function kamadaKawaiCompute(graphData, options, progressCallback) {
+  // Debug: Log what we're receiving
+  console.log('[Kamada-Kawai] Received graphData:', {
+    hasNodes: 'nodes' in graphData,
+    nodesType: typeof graphData.nodes,
+    nodesIsArray: Array.isArray(graphData.nodes),
+    hasEdges: 'edges' in graphData,
+    edgesType: typeof graphData.edges,
+    edgesIsArray: Array.isArray(graphData.edges)
+  });
+
   const graph = reconstructGraph(graphData);
+
+  console.log('[Kamada-Kawai] After reconstructGraph, graph.nodes:', {
+    type: typeof graph.nodes,
+    isSet: graph.nodes instanceof Set,
+    size: graph.nodes?.size || 'N/A'
+  });
+
   const {
     iterations = 100,
     scale = 1,
@@ -108,6 +125,12 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
 
   const nodes = Array.from(graph.nodes);
   const n = nodes.length;
+
+  console.log('[Kamada-Kawai] Nodes array:', {
+    length: nodes.length,
+    isArray: Array.isArray(nodes),
+    sample: nodes.slice(0, 3)
+  });
 
   // Handle edge cases
   if (n === 0) {
