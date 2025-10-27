@@ -263,22 +263,66 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
     };
   });
 
-  console.log('[Kamada-Kawai] Calling rescaleLayout with correct signature');
+  // Debug: log sample positions BEFORE rescaling
+  const sampleNode = nodes[0];
+  console.log('[Kamada-Kawai] Sample positions BEFORE rescaling:', {
+    sample: sampleNode,
+    value: positionsDict[sampleNode],
+    allCount: Object.keys(positionsDict).length,
+    minMax: (() => {
+      let minX = Infinity, maxX = -Infinity;
+      let minY = Infinity, maxY = -Infinity;
+      Object.values(positionsDict).forEach(p => {
+        minX = Math.min(minX, p.x);
+        maxX = Math.max(maxX, p.x);
+        minY = Math.min(minY, p.y);
+        maxY = Math.max(maxY, p.y);
+      });
+      return { minX, maxX, minY, maxY, rangeX: maxX - minX, rangeY: maxY - minY };
+    })()
+  });
+
+  console.log('[Kamada-Kawai] Calling rescaleLayout with correct signature, scale:', scale, 'center:', center);
   const rescaledDict = rescaleLayout(positionsDict, nodes, scale, center);
   console.log('[Kamada-Kawai] rescaleLayout completed successfully');
+
+  // Debug: log sample positions AFTER rescaling
+  console.log('[Kamada-Kawai] Sample positions AFTER rescaling:', {
+    sample: sampleNode,
+    value: rescaledDict[sampleNode],
+    minMax: (() => {
+      let minX = Infinity, maxX = -Infinity;
+      let minY = Infinity, maxY = -Infinity;
+      Object.values(rescaledDict).forEach(p => {
+        minX = Math.min(minX, p.x);
+        maxX = Math.max(maxX, p.x);
+        minY = Math.min(minY, p.y);
+        maxY = Math.max(maxY, p.y);
+      });
+      return { minX, maxX, minY, maxY, rangeX: maxX - minX, rangeY: maxY - minY };
+    })()
+  });
 
   // Create result dictionary from rescaled positions
   const positions = {};
   console.log('[Kamada-Kawai] Creating final positions dictionary');
 
   try {
-    Object.entries(rescaledDict).forEach(([nodeId, pos]) => {
+    Object.entries(rescaledDict).forEach(([nodeId, posValue]) => {
       positions[nodeId] = {
-        x: pos.x,
-        y: pos.y
+        x: posValue.x,
+        y: posValue.y
       };
     });
     console.log('[Kamada-Kawai] Final positions dictionary created successfully, count:', Object.keys(positions).length);
+
+    // Log a few sample final positions
+    const samples = nodes.slice(0, 3);
+    const samplePositions = {};
+    samples.forEach(n => {
+      samplePositions[n] = positions[n];
+    });
+    console.log('[Kamada-Kawai] Sample final positions:', samplePositions);
   } catch (err) {
     console.error('[Kamada-Kawai] Error creating positions dictionary:', err.message);
     console.error('  rescaledDict:', rescaledDict);
