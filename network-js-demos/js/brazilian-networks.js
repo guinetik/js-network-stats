@@ -482,7 +482,7 @@ export function createBrazilianNetworksApp(graph) {
           layout = new SpiralLayout(currentGraph, {
             scale: scale,
             center: { x: width / 2, y: height / 2 },
-            spacing: 1.5
+            resolution: 0.15  // Looser spiral (lower = fewer rotations per node)
           });
           layoutName = 'Spiral';
           break;
