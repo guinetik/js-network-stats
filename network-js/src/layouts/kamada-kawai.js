@@ -424,18 +424,23 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
 /**
  * Compute all-pairs shortest paths using BFS
  *
+ * NetworkX handles disconnected components by using 1e6 instead of Infinity
+ * This allows the algorithm to handle graphs with multiple connected components
+ *
  * @param {Map} graph - Graph with adjacency structure
  * @param {Array} nodes - List of node IDs
  * @returns {Array<Array<number>>} Distance matrix
  */
 function computeAllPairsShortestPaths(graph, nodes) {
   const n = nodes.length;
-  const distances = Array(n).fill(null).map(() => Array(n).fill(Infinity));
+  // Initialize with 1e6 for disconnected pairs (like NetworkX does)
+  // This avoids NaN issues with Infinity in calculations
+  const distances = Array(n).fill(null).map(() => Array(n).fill(1e6));
   const nodeIndex = {};
 
   nodes.forEach((node, i) => {
     nodeIndex[node] = i;
-    distances[i][i] = 0;
+    distances[i][i] = 0;  // Distance to self is 0
   });
 
   // BFS from each node
