@@ -390,6 +390,7 @@ export function createNetworkGraphApp(graph, initialData) {
 
                     if (!hasSpectralData) {
                         this.setNodeInfo('error', 'Spectral layout requires eigenvector-laplacian stat. Include it in analysis.');
+                        graph.showGraphAfterCalculation();  // Show graph again since we're not proceeding with layout
                         this.isApplyingLayout = false;
                         return;
                     }

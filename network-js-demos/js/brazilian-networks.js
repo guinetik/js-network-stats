@@ -530,6 +530,7 @@ export function createBrazilianNetworksApp(graph) {
 
           if (!hasSpectralData) {
             this.setNodeInfo('error', 'Spectral layout requires eigenvector-laplacian stat. Include it in "Analyze Network".');
+            graph.showGraphAfterCalculation();  // Show graph again since we're not proceeding with layout
             this.isApplyingLayout = false;
             return;
           }
