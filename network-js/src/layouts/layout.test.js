@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Layout } from './layout.js';
 import { ForceDirectedLayout } from './force-directed.js';
 import { CircularLayout } from './circular.js';
-import Graph from '../graph.js';
+import { Graph } from '../graph.js';
 
 describe('Layout (Abstract Base Class)', () => {
   let graph;

@@ -8,7 +8,7 @@
  * @module compute-utils
  */
 
-import Graph from '../graph.js';
+import { Graph } from '../graph.js';
 
 /**
  * Reconstruct a Graph instance from serialized data
