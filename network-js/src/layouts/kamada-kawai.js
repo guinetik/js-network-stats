@@ -249,12 +249,41 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
   reportProgress(progressCallback, 0.95);
 
   // Rescale positions
+  console.log('[Kamada-Kawai] Before rescaling - nodes state:', {
+    type: typeof nodes,
+    isArray: Array.isArray(nodes),
+    length: nodes?.length,
+    hasForEach: typeof nodes?.forEach,
+    constructor: nodes?.constructor?.name
+  });
+
   const posArray = pos.map(p => [...p]);
+  console.log('[Kamada-Kawai] After posArray.map - nodes state:', {
+    type: typeof nodes,
+    isArray: Array.isArray(nodes),
+    length: nodes?.length,
+    hasForEach: typeof nodes?.forEach
+  });
+
   const rescaled = rescaleLayout(posArray, scale);
+  console.log('[Kamada-Kawai] After rescaleLayout - nodes state:', {
+    type: typeof nodes,
+    isArray: Array.isArray(nodes),
+    length: nodes?.length,
+    hasForEach: typeof nodes?.forEach
+  });
 
   // Create result dictionary
   const positions = {};
   console.log('[Kamada-Kawai] About to call nodes.forEach for result positions');
+  console.log('[Kamada-Kawai] nodes at forEach time:', {
+    type: typeof nodes,
+    isArray: Array.isArray(nodes),
+    length: nodes?.length,
+    hasForEach: typeof nodes?.forEach,
+    actual_value_sample: Array.isArray(nodes) ? nodes.slice(0, 3) : 'NOT_AN_ARRAY'
+  });
+
   try {
     nodes.forEach((nodeId, i) => {
       positions[nodeId] = {
@@ -267,6 +296,7 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
     console.error('[Kamada-Kawai] Error in result positions forEach:', err.message);
     console.error('  nodes type:', typeof nodes);
     console.error('  nodes isArray:', Array.isArray(nodes));
+    console.error('  nodes value:', nodes);
     throw err;
   }
 

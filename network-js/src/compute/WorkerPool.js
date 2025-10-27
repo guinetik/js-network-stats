@@ -452,9 +452,7 @@ export class WorkerPool {
    * @param {string} message - Message to log
    */
   log(message) {
-    if (this.verbose) {
-      console.log(`[WorkerPool] ${message}`);
-    }
+    console.log(`[WorkerPool] ${message}`);
   }
 }
 
