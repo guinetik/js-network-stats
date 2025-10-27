@@ -249,54 +249,39 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
   reportProgress(progressCallback, 0.95);
 
   // Rescale positions
-  console.log('[Kamada-Kawai] Before rescaling - nodes state:', {
-    type: typeof nodes,
-    isArray: Array.isArray(nodes),
-    length: nodes?.length,
-    hasForEach: typeof nodes?.forEach,
-    constructor: nodes?.constructor?.name
+  // NOTE: rescaleLayout expects (positionsDict, nodesArray, scale, center)
+  // But our positions are stored as array of [x, y] pairs
+  // Convert to the format rescaleLayout expects, then convert back
+  console.log('[Kamada-Kawai] Before rescaling - preparing positions');
+
+  // Create positions object for rescaleLayout
+  const positionsDict = {};
+  nodes.forEach((nodeId, i) => {
+    positionsDict[nodeId] = {
+      x: pos[i][0],
+      y: pos[i][1]
+    };
   });
 
-  const posArray = pos.map(p => [...p]);
-  console.log('[Kamada-Kawai] After posArray.map - nodes state:', {
-    type: typeof nodes,
-    isArray: Array.isArray(nodes),
-    length: nodes?.length,
-    hasForEach: typeof nodes?.forEach
-  });
+  console.log('[Kamada-Kawai] Calling rescaleLayout with correct signature');
+  const rescaledDict = rescaleLayout(positionsDict, nodes, scale, center);
+  console.log('[Kamada-Kawai] rescaleLayout completed successfully');
 
-  const rescaled = rescaleLayout(posArray, scale);
-  console.log('[Kamada-Kawai] After rescaleLayout - nodes state:', {
-    type: typeof nodes,
-    isArray: Array.isArray(nodes),
-    length: nodes?.length,
-    hasForEach: typeof nodes?.forEach
-  });
-
-  // Create result dictionary
+  // Create result dictionary from rescaled positions
   const positions = {};
-  console.log('[Kamada-Kawai] About to call nodes.forEach for result positions');
-  console.log('[Kamada-Kawai] nodes at forEach time:', {
-    type: typeof nodes,
-    isArray: Array.isArray(nodes),
-    length: nodes?.length,
-    hasForEach: typeof nodes?.forEach,
-    actual_value_sample: Array.isArray(nodes) ? nodes.slice(0, 3) : 'NOT_AN_ARRAY'
-  });
+  console.log('[Kamada-Kawai] Creating final positions dictionary');
 
   try {
-    nodes.forEach((nodeId, i) => {
+    Object.entries(rescaledDict).forEach(([nodeId, pos]) => {
       positions[nodeId] = {
-        x: rescaled[i][0] + center.x,
-        y: rescaled[i][1] + center.y
+        x: pos.x,
+        y: pos.y
       };
     });
-    console.log('[Kamada-Kawai] result positions forEach completed successfully');
+    console.log('[Kamada-Kawai] Final positions dictionary created successfully, count:', Object.keys(positions).length);
   } catch (err) {
-    console.error('[Kamada-Kawai] Error in result positions forEach:', err.message);
-    console.error('  nodes type:', typeof nodes);
-    console.error('  nodes isArray:', Array.isArray(nodes));
-    console.error('  nodes value:', nodes);
+    console.error('[Kamada-Kawai] Error creating positions dictionary:', err.message);
+    console.error('  rescaledDict:', rescaledDict);
     throw err;
   }
 
