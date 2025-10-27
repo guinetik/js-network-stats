@@ -149,8 +149,9 @@ export async function shellCompute(graphData, options, progressCallback) {
       // Count edges for each node
       if (graphData.edges) {
         for (const edge of graphData.edges) {
-          const source = edge.source !== undefined ? edge.source : edge[0];
-          const target = edge.target !== undefined ? edge.target : edge[1];
+          // Handle multiple edge formats: {u, v}, {source, target}, [source, target]
+          const source = edge.u !== undefined ? edge.u : (edge.source !== undefined ? edge.source : edge[0]);
+          const target = edge.v !== undefined ? edge.v : (edge.target !== undefined ? edge.target : edge[1]);
           if (nodeDegrees.has(source)) {
             nodeDegrees.set(source, nodeDegrees.get(source) + 1);
           }
