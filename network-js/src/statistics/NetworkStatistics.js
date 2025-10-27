@@ -8,6 +8,7 @@ import {
   BetweennessStatistic,
   ClusteringStatistic,
   EigenvectorStatistic,
+  EigenvectorLaplacianStatistic,
   CliquesStatistic,
   // Graph-level
   DensityStatistic,

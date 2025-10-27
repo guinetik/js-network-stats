@@ -18,6 +18,7 @@ import {
   BetweennessStatistic,
   ClusteringStatistic,
   EigenvectorStatistic,
+  EigenvectorLaplacianStatistic,
   CliquesStatistic,
   ClosenessStatistic,
   EgoDensityStatistic
@@ -68,6 +69,7 @@ export class NetworkStats {
    */
   static FEATURES = {
     EIGENVECTOR: "eigenvector",
+    EIGENVECTOR_LAPLACIAN: "eigenvector-laplacian",
     MODULARITY: "modularity",
     BETWEENNESS: "betweenness",
     CLUSTERING: "clustering",
@@ -80,6 +82,7 @@ export class NetworkStats {
       "betweenness",
       "clustering",
       "eigenvector",
+      "eigenvector-laplacian",
       "cliques",
       "closeness",
       "ego-density"
@@ -164,6 +167,7 @@ export class NetworkStats {
       [NetworkStats.FEATURES.BETWEENNESS]: BetweennessStatistic,
       [NetworkStats.FEATURES.CLUSTERING]: ClusteringStatistic,
       [NetworkStats.FEATURES.EIGENVECTOR]: EigenvectorStatistic,
+      [NetworkStats.FEATURES.EIGENVECTOR_LAPLACIAN]: EigenvectorLaplacianStatistic,
       [NetworkStats.FEATURES.CLIQUES]: CliquesStatistic,
       [NetworkStats.FEATURES.CLOSENESS]: ClosenessStatistic,
       [NetworkStats.FEATURES.EGO_DENSITY]: EgoDensityStatistic,

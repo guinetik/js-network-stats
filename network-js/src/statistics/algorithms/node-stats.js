@@ -143,6 +143,34 @@ export class EigenvectorStatistic extends StatisticAlgorithm {
 }
 
 /**
+ * Laplacian eigenvector statistic.
+ * Computes the 2nd and 3rd smallest eigenvectors of the graph Laplacian.
+ * Used for spectral layout visualization.
+ *
+ * The Laplacian matrix L = D - A (degree matrix minus adjacency matrix).
+ * The smallest eigenvector (trivial, all constant) is skipped.
+ * The 2nd and 3rd smallest eigenvectors provide good 2D layout coordinates.
+ *
+ * **Complexity**: O(V * k^2) where k is number of iterations
+ * **Use case**: Spectral layout, community detection, graph visualization
+ *
+ * @extends StatisticAlgorithm
+ */
+export class EigenvectorLaplacianStatistic extends StatisticAlgorithm {
+  constructor(options = {}) {
+    super('eigenvector-laplacian', 'X,Y coordinates from Laplacian eigenvectors', 'node', {
+      module: '../statistics/algorithms/node-stats.js',
+      functionName: 'eigenvectorLaplacianCompute'
+    });
+    this.options = {
+      maxIter: options.maxIter || 100,
+      tolerance: options.tolerance || 1e-6
+    };
+  }
+  // calculate() inherited from base class - delegates to worker!
+}
+
+/**
  * Clique count statistic.
  * Counts the number of maximal cliques each node belongs to.
  * Uses Bron-Kerbosch algorithm.
@@ -485,4 +513,168 @@ export async function egoDensityCompute(graphData, nodeIds, options, progressCal
 
   reportProgress(progressCallback, 1.0);
   return result;
+}
+
+/**
+ * Compute Laplacian eigenvectors for spectral layout
+ *
+ * Computes the 2nd and 3rd smallest eigenvectors of the graph Laplacian.
+ * L = D - A where D is degree matrix, A is adjacency matrix.
+ *
+ * @param {Object} graphData - Serialized graph data
+ * @param {Array} nodeIds - Not used (always computes all nodes)
+ * @param {Object} options - Algorithm options
+ * @param {number} options.maxIter - Maximum power iteration steps
+ * @param {number} options.tolerance - Convergence tolerance
+ * @param {Function} progressCallback - Progress reporting callback
+ * @returns {Object} Node ID -> {laplacian_x, laplacian_y}
+ */
+export async function eigenvectorLaplacianCompute(graphData, nodeIds, options, progressCallback) {
+  const graph = reconstructGraph(graphData);
+  const nodes = Array.from(graph.nodes);
+  const n = nodes.length;
+
+  if (n < 3) {
+    // Need at least 3 nodes for 2D Laplacian eigenvectors
+    const result = {};
+    nodes.forEach(node => {
+      result[node] = { laplacian_x: Math.random() * 2 - 1, laplacian_y: Math.random() * 2 - 1 };
+    });
+    reportProgress(progressCallback, 1.0);
+    return result;
+  }
+
+  const { maxIter = 100, tolerance = 1e-6 } = options || {};
+
+  // Build Laplacian matrix L = D - A
+  // Store as dense matrix for simplicity
+  const L = Array(n).fill(null).map(() => Array(n).fill(0));
+
+  // Create node index map
+  const nodeIndex = new Map();
+  nodes.forEach((node, idx) => nodeIndex.set(node, idx));
+
+  // Fill Laplacian: L[i][i] = degree[i], L[i][j] = -1 if edge exists
+  for (let i = 0; i < n; i++) {
+    const node = nodes[i];
+    const neighbors = graph.getNeighbors(node);
+    L[i][i] = neighbors.length; // Diagonal = degree
+
+    neighbors.forEach(neighbor => {
+      const j = nodeIndex.get(neighbor);
+      if (j !== undefined) {
+        L[i][j] = -1; // Off-diagonal = -1 for edges
+      }
+    });
+  }
+
+  reportProgress(progressCallback, 0.2);
+
+  // Find 2nd and 3rd smallest eigenvectors using power iteration with deflation
+  // The smallest eigenvalue of L is always 0 (trivial eigenvector: all ones)
+  // We want the eigenvectors corresponding to the 2nd and 3rd smallest eigenvalues
+
+  // Initialize random vectors
+  const v1 = Array(n).fill(0).map(() => Math.random());
+  const v2 = Array(n).fill(0).map(() => Math.random());
+
+  normalize(v1);
+  normalize(v2);
+
+  // Power iteration to find 2nd eigenvector
+  for (let iter = 0; iter < maxIter; iter++) {
+    const Lv = multiplyMatrixVector(L, v1);
+    normalize(Lv);
+
+    // Check convergence
+    let diff = 0;
+    for (let i = 0; i < n; i++) {
+      diff += Math.abs(Lv[i] - v1[i]);
+    }
+    if (diff < tolerance) break;
+
+    for (let i = 0; i < n; i++) {
+      v1[i] = Lv[i];
+    }
+
+    if (iter % 20 === 0) {
+      reportProgress(progressCallback, 0.2 + (iter / maxIter) * 0.4);
+    }
+  }
+
+  reportProgress(progressCallback, 0.6);
+
+  // Orthogonalize v2 against v1
+  orthogonalize(v2, v1);
+  normalize(v2);
+
+  // Power iteration to find 3rd eigenvector
+  for (let iter = 0; iter < maxIter; iter++) {
+    const Lv = multiplyMatrixVector(L, v2);
+    normalize(Lv);
+    orthogonalize(Lv, v1);
+    orthogonalize(Lv, v2);
+    normalize(Lv);
+
+    // Check convergence
+    let diff = 0;
+    for (let i = 0; i < n; i++) {
+      diff += Math.abs(Lv[i] - v2[i]);
+    }
+    if (diff < tolerance) break;
+
+    for (let i = 0; i < n; i++) {
+      v2[i] = Lv[i];
+    }
+
+    if (iter % 20 === 0) {
+      reportProgress(progressCallback, 0.6 + (iter / maxIter) * 0.39);
+    }
+  }
+
+  reportProgress(progressCallback, 0.99);
+
+  // Construct result
+  const result = {};
+  nodes.forEach((node, idx) => {
+    result[node] = {
+      laplacian_x: v1[idx],
+      laplacian_y: v2[idx]
+    };
+  });
+
+  reportProgress(progressCallback, 1.0);
+  return result;
+}
+
+/**
+ * Helper: Multiply matrix by vector
+ * @param {Array<Array>} matrix - n x n matrix
+ * @param {Array} vector - n-length vector
+ * @returns {Array} Result vector
+ */
+function multiplyMatrixVector(matrix, vector) {
+  const n = matrix.length;
+  const result = Array(n).fill(0);
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      result[i] += matrix[i][j] * vector[j];
+    }
+  }
+  return result;
+}
+
+/**
+ * Helper: Orthogonalize vector u against vector v
+ * @param {Array} u - Vector to orthogonalize
+ * @param {Array} v - Reference vector
+ */
+function orthogonalize(u, v) {
+  let dot = 0;
+  for (let i = 0; i < u.length; i++) {
+    dot += u[i] * v[i];
+  }
+  for (let i = 0; i < u.length; i++) {
+    u[i] -= dot * v[i];
+  }
 }

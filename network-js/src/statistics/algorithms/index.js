@@ -9,6 +9,7 @@ export {
   BetweennessStatistic,
   ClusteringStatistic,
   EigenvectorStatistic,
+  EigenvectorLaplacianStatistic,
   CliquesStatistic
 } from './node-stats.js';
 
