@@ -16,8 +16,8 @@ import { reportProgress } from '../compute/compute-utils.js';
 /**
  * Shell layout - arranges nodes in concentric shells/circles.
  *
- * Groups nodes into concentric circles based on a metric or provided grouping.
- * Useful for visualizing hierarchical structures or node importance.
+ * Groups nodes into concentric circles. Each shell can be rotated relative to
+ * the previous one for better visualization. Follows NetworkX implementation.
  *
  * **Time Complexity**: O(V)
  * **Use Case**: Hierarchical networks, layer-based visualization
@@ -34,11 +34,11 @@ import { reportProgress } from '../compute/compute-utils.js';
  * graph.addEdge('B', 'C');
  *
  * const layout = new ShellLayout(graph, {
- *   scale: 200
+ *   scale: 200,
+ *   nlist: [['A'], ['B', 'C', 'D', 'E']]  // Optional shell grouping
  * });
  *
  * const positions = await layout.getPositions(); // NOW ASYNC!
- * // positions = { 'A': {x: 0, y: 0}, 'B': {x: 100, y: 0}, ... }
  */
 export class ShellLayout extends Layout {
   /**
@@ -49,14 +49,14 @@ export class ShellLayout extends Layout {
    * @param {number} [options.scale=100] - Scale factor for positions
    * @param {Object} [options.center={x:0, y:0}] - Center point
    * @param {Array<Array<string>>} [options.nlist=null] - Pre-defined node shells (groups of node IDs)
-   * @param {Function} [options.shellSortBy=null] - Function to sort nodes into shells based on property
+   * @param {number|null} [options.rotate=null] - Rotation offset between shells (default: π/num_shells)
    */
   constructor(graph, options = {}) {
     super(graph, {
       scale: 100,
       center: { x: 0, y: 0 },
       nlist: null,
-      shellSortBy: null,
+      rotate: null,
       ...options
     }, {
       module: '../layouts/shell.js',
@@ -73,14 +73,19 @@ export default ShellLayout;
 //=============================================================================
 
 /**
- * Compute shell layout with concentric circles
+ * Compute shell layout with concentric circles - NetworkX implementation
+ *
+ * Key features:
+ * - Divides scale evenly among shells (radius_bump = scale / num_shells)
+ * - Rotates each shell relative to previous (default rotate = π / num_shells)
+ * - Center shell (if single node) at radius 0
  *
  * @param {Object} graphData - Serialized graph data
  * @param {Object} options - Layout options
  * @param {number} options.scale - Scale factor for positions (default: 1)
  * @param {Object} options.center - Center point {x, y} (default: {x: 0, y: 0})
  * @param {Array<Array<string>>} options.nlist - Pre-defined node shells
- * @param {Function} options.shellSortBy - Function to sort nodes into shells
+ * @param {number|null} options.rotate - Shell rotation (default: π/num_shells)
  * @param {Function} progressCallback - Progress reporting callback
  * @returns {Object} Node ID -> { x, y }
  */
@@ -92,10 +97,8 @@ export async function shellCompute(graphData, options, progressCallback) {
     scale = 1,
     center = { x: 0, y: 0 },
     nlist = null,
-    shellSortBy = null
+    rotate = null
   } = options || {};
-
-  const positions = {};
 
   // Handle edge cases
   if (n === 0) {
@@ -115,63 +118,60 @@ export async function shellCompute(graphData, options, progressCallback) {
   if (nlist && Array.isArray(nlist)) {
     // Use provided shells
     shells = nlist;
-  } else if (shellSortBy && typeof shellSortBy === 'function') {
-    // Sort nodes by property and create shells
-    // This is simplified - group nodes by property value
-    const grouped = new Map();
-    nodes.forEach(node => {
-      const key = shellSortBy(node);
-      if (!grouped.has(key)) {
-        grouped.set(key, []);
-      }
-      grouped.get(key).push(node);
-    });
-    shells = Array.from(grouped.values());
   } else {
-    // Default: distribute nodes evenly into sqrt(n) shells
-    const numShells = Math.max(1, Math.ceil(Math.sqrt(n)));
-    const nodesPerShell = Math.ceil(n / numShells);
-    shells = [];
-
-    for (let i = 0; i < numShells; i++) {
-      const start = i * nodesPerShell;
-      const end = Math.min(start + nodesPerShell, n);
-      shells.push(nodes.slice(start, end));
-    }
+    // Default: all nodes in one shell
+    shells = [nodes];
   }
 
-  // Position nodes in each shell as a circle
-  shells.forEach((shell, shellIndex) => {
-    const shellCount = shells.length;
+  // Calculate radius increment per shell
+  const radiusBump = scale / shells.length;
 
-    // Radius for this shell (increase from center)
-    // First shell at center, others at increasing radii
-    let radius;
-    if (shellIndex === 0) {
-      radius = 0; // Center shell at origin
-    } else {
-      // Linear spacing from scale/2 to scale
-      const maxRadius = scale;
-      const minRadius = scale * 0.1;
-      radius = minRadius + (shellIndex / (shellCount - 1)) * (maxRadius - minRadius);
-    }
+  // Determine initial radius
+  let radius;
+  if (shells[0].length === 1) {
+    // Single node in first shell: put at center
+    radius = 0.0;
+  } else {
+    // Multiple nodes: start at radius_bump
+    radius = radiusBump;
+  }
 
+  // Determine rotation offset between shells
+  let rotationOffset;
+  if (rotate === null) {
+    // Default: rotate by π/num_shells between each shell
+    rotationOffset = Math.PI / shells.length;
+  } else {
+    rotationOffset = rotate;
+  }
+
+  // Position nodes shell by shell
+  const positions = {};
+  let firstTheta = rotationOffset;
+
+  for (const shell of shells) {
     const nodesInShell = shell.length;
 
-    // Place nodes around circle for this shell
-    shell.forEach((nodeId, nodeIndex) => {
-      if (nodesInShell === 1) {
-        // Single node in shell: place at center of this shell
-        positions[nodeId] = { x: center.x, y: center.y };
-      } else {
-        // Multiple nodes: arrange in circle
-        const angle = (2 * Math.PI * nodeIndex) / nodesInShell;
-        const x = radius * Math.cos(angle) + center.x;
-        const y = radius * Math.sin(angle) + center.y;
-        positions[nodeId] = { x, y };
-      }
+    if (nodesInShell === 0) continue;
+
+    // Create angle array: evenly spaced around circle [0, 2π)
+    const angles = [];
+    for (let i = 0; i < nodesInShell; i++) {
+      angles.push((2 * Math.PI * i) / nodesInShell + firstTheta);
+    }
+
+    // Position nodes for this shell
+    shell.forEach((nodeId, i) => {
+      const angle = angles[i];
+      const x = radius * Math.cos(angle) + center.x;
+      const y = radius * Math.sin(angle) + center.y;
+      positions[nodeId] = { x, y };
     });
-  });
+
+    // Update for next shell
+    radius += radiusBump;
+    firstTheta += rotationOffset;
+  }
 
   reportProgress(progressCallback, 1.0);
   return positions;
