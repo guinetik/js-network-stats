@@ -189,6 +189,7 @@
                         <option value="circular">Circular</option>
                         <option value="spiral">Spiral</option>
                         <option value="shell">Shell</option>
+                        <option value="spectral">Spectral</option>
                         <option value="force-directed">Force-Directed</option>
                     </select>
                 </div>
@@ -207,7 +208,8 @@
                         <strong>Random:</strong> Random node positioning<br>
                         <strong>Circular:</strong> Nodes arranged in a circle<br>
                         <strong>Spiral:</strong> Archimedean spiral arrangement<br>
-                        <strong>Shell:</strong> Concentric circles layout<br>
+                        <strong>Shell:</strong> Concentric circles by degree (requires analysis)<br>
+                        <strong>Spectral:</strong> Laplacian eigenvectors (requires eigenvector-laplacian)<br>
                         <strong>Force-Directed:</strong> Spring-electrical model
                     </p>
                 </div>
@@ -239,6 +241,10 @@
                         <label class="flex items-center gap-2 text-sm">
                             <input type="checkbox" x-model="selectedFeatures" value="eigenvector" class="rounded">
                             <span class="text-gray-700 dark:text-gray-300">Eigenvector Centrality</span>
+                        </label>
+                        <label class="flex items-center gap-2 text-sm">
+                            <input type="checkbox" x-model="selectedFeatures" value="eigenvector-laplacian" class="rounded">
+                            <span class="text-gray-700 dark:text-gray-300">Eigenvector (Laplacian) - for Spectral layout</span>
                         </label>
                     </div>
                 </div>

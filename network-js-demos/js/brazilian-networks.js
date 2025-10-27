@@ -1,5 +1,5 @@
 import * as d3 from 'd3';
-import { Graph, ForceDirectedLayout, CircularLayout, RandomLayout, SpiralLayout, ShellLayout } from '../../network-js/src/index.js';
+import { Graph, ForceDirectedLayout, CircularLayout, RandomLayout, SpiralLayout, ShellLayout, SpectralLayout } from '../../network-js/src/index.js';
 // Import worker URL for Vite
 import workerUrl from '../../network-js/src/compute/network-worker.js?worker&url';
 
@@ -502,6 +502,34 @@ export function createBrazilianNetworksApp(graph) {
             nodeProperties: nodePropsMap.size > 0 ? nodePropsMap : null
           });
           layoutName = 'Shell';
+          break;
+
+        case 'spectral':
+          // Build nodeProperties map with Laplacian eigenvector coordinates if available
+          const spectralPropsMap = new Map();
+          let hasSpectralData = false;
+          graph.data.nodes.forEach(node => {
+            if (node.laplacian_x !== undefined && node.laplacian_y !== undefined) {
+              spectralPropsMap.set(node.id, {
+                laplacian_x: node.laplacian_x,
+                laplacian_y: node.laplacian_y
+              });
+              hasSpectralData = true;
+            }
+          });
+
+          if (!hasSpectralData) {
+            this.setNodeInfo('error', 'Spectral layout requires eigenvector-laplacian stat. Include it in "Analyze Network".');
+            this.isApplyingLayout = false;
+            return;
+          }
+
+          layout = new SpectralLayout(currentGraph, {
+            scale: scale,
+            center: { x: width / 2, y: height / 2 },
+            nodeProperties: spectralPropsMap.size > 0 ? spectralPropsMap : null
+          });
+          layoutName = 'Spectral';
           break;
 
         default:
