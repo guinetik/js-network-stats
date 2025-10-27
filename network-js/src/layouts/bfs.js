@@ -212,7 +212,7 @@ function bfs(graph, startNode, allNodes) {
     const node = queue.shift();
     currentLayer.push(node);
 
-    const neighbors = graph.get(node) || [];
+    const neighbors = graph.getNeighbors(node) || [];
     const unvisitedNeighbors = neighbors.filter(n => !visited.has(n));
 
     unvisitedNeighbors.forEach(n => {
@@ -254,7 +254,7 @@ function bfs(graph, startNode, allNodes) {
 
     currentLayer.push(node);
 
-    const neighbors = graph.get(node) || [];
+    const neighbors = graph.getNeighbors(node) || [];
     neighbors.forEach(neighbor => {
       if (!distance.has(neighbor)) {
         distance.set(neighbor, nodeDist + 1);

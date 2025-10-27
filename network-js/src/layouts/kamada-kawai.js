@@ -238,7 +238,7 @@ function computeAllPairsShortestPaths(graph, nodes) {
         distances[start][nodeIdx] = dist;
       }
 
-      const neighbors = graph.get(node) || [];
+      const neighbors = graph.getNeighbors(node) || [];
       for (const neighbor of neighbors) {
         if (!visited.has(neighbor)) {
           visited.add(neighbor);
