@@ -8,7 +8,7 @@
  * @module compute-utils
  */
 
-import { Graph } from '../graph.js';
+import Graph from '../graph.js';
 
 /**
  * Reconstruct a Graph instance from serialized data
@@ -21,19 +21,50 @@ import { Graph } from '../graph.js';
 export function reconstructGraph(graphData) {
   const graph = new Graph();
 
-  // Add all nodes
-  if (graphData.nodes) {
-    graphData.nodes.forEach(nodeId => {
-      graph.addNode(nodeId);
-    });
+  // Defensive: ensure graphData is valid
+  if (!graphData || typeof graphData !== 'object') {
+    console.warn('Invalid graphData passed to reconstructGraph:', graphData);
+    return graph;
   }
 
-  // Add all edges
+  // Add all nodes - handle both array and iterable formats
+  if (graphData.nodes) {
+    try {
+      // Convert to array if needed (handles Set, Array, or other iterables)
+      const nodeArray = Array.isArray(graphData.nodes)
+        ? graphData.nodes
+        : Array.from(graphData.nodes);
+
+      nodeArray.forEach(nodeId => {
+        graph.addNode(nodeId);
+      });
+    } catch (error) {
+      console.error('Error adding nodes:', error, 'nodes:', graphData.nodes);
+      throw new Error(`Failed to reconstruct nodes: ${error.message}`);
+    }
+  }
+
+  // Add all edges - handle edge format variations
   if (graphData.edges) {
-    graphData.edges.forEach(edge => {
-      const { source, target, weight = 1 } = edge;
-      graph.addEdge(source, target, weight);
-    });
+    try {
+      const edgeArray = Array.isArray(graphData.edges)
+        ? graphData.edges
+        : Array.from(graphData.edges);
+
+      edgeArray.forEach(edge => {
+        // Handle both {source, target} and {u, v} formats
+        const source = edge.source !== undefined ? edge.source : edge.u;
+        const target = edge.target !== undefined ? edge.target : edge.v;
+        const weight = edge.weight || 1;
+
+        if (source !== undefined && target !== undefined) {
+          graph.addEdge(source, target, weight);
+        }
+      });
+    } catch (error) {
+      console.error('Error adding edges:', error, 'edges:', graphData.edges);
+      throw new Error(`Failed to reconstruct edges: ${error.message}`);
+    }
   }
 
   return graph;

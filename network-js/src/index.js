@@ -10,7 +10,7 @@
  */
 
 import { createLogger } from "@guinetik/logger";
-import { Graph } from "./graph.js";
+import Graph from "./graph.js";
 import { WorkerManager } from "./compute/index.js";
 import {
   NetworkStatistics,
