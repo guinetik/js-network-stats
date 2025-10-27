@@ -146,12 +146,37 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
 
   // Compute all-pairs shortest paths using BFS from each node
   reportProgress(progressCallback, 0.1);
-  const distances = computeAllPairsShortestPaths(graph, nodes);
+  console.log('[Kamada-Kawai] About to compute all-pairs shortest paths:', {
+    nodesLength: nodes.length,
+    nodesIsArray: Array.isArray(nodes),
+    nodesType: typeof nodes
+  });
+
+  let distances;
+  try {
+    distances = computeAllPairsShortestPaths(graph, nodes);
+    console.log('[Kamada-Kawai] All-pairs shortest paths computed successfully');
+  } catch (err) {
+    console.error('[Kamada-Kawai] Error in computeAllPairsShortestPaths:', err.message, err.stack);
+    throw err;
+  }
 
   reportProgress(progressCallback, 0.3);
 
   // Initialize positions
-  let pos = initializePositions(nodes, initialPositions);
+  console.log('[Kamada-Kawai] About to initialize positions');
+  let pos;
+  try {
+    pos = initializePositions(nodes, initialPositions);
+    console.log('[Kamada-Kawai] Positions initialized successfully, pos:', {
+      type: typeof pos,
+      isArray: Array.isArray(pos),
+      length: pos?.length || 'N/A'
+    });
+  } catch (err) {
+    console.error('[Kamada-Kawai] Error in initializePositions:', err.message, err.stack);
+    throw err;
+  }
 
   // Calculate scaling factor K
   const Lmax = Math.max(...distances.flat());
@@ -162,9 +187,19 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
 
   // Optimization loop
   const nodeIndex = {};
-  nodes.forEach((node, i) => {
-    nodeIndex[node] = i;
-  });
+  console.log('[Kamada-Kawai] About to call nodes.forEach for nodeIndex');
+  try {
+    nodes.forEach((node, i) => {
+      nodeIndex[node] = i;
+    });
+    console.log('[Kamada-Kawai] nodeIndex forEach completed successfully');
+  } catch (err) {
+    console.error('[Kamada-Kawai] Error in nodeIndex forEach:', err.message);
+    console.error('  nodes type:', typeof nodes);
+    console.error('  nodes isArray:', Array.isArray(nodes));
+    console.error('  nodes value:', nodes);
+    throw err;
+  }
 
   for (let iter = 0; iter < iterations; iter++) {
     let delta = 0;
@@ -219,12 +254,21 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
 
   // Create result dictionary
   const positions = {};
-  nodes.forEach((nodeId, i) => {
-    positions[nodeId] = {
-      x: rescaled[i][0] + center.x,
-      y: rescaled[i][1] + center.y
-    };
-  });
+  console.log('[Kamada-Kawai] About to call nodes.forEach for result positions');
+  try {
+    nodes.forEach((nodeId, i) => {
+      positions[nodeId] = {
+        x: rescaled[i][0] + center.x,
+        y: rescaled[i][1] + center.y
+      };
+    });
+    console.log('[Kamada-Kawai] result positions forEach completed successfully');
+  } catch (err) {
+    console.error('[Kamada-Kawai] Error in result positions forEach:', err.message);
+    console.error('  nodes type:', typeof nodes);
+    console.error('  nodes isArray:', Array.isArray(nodes));
+    throw err;
+  }
 
   reportProgress(progressCallback, 1.0);
   return positions;
