@@ -1,5 +1,5 @@
 import * as d3 from 'd3';
-import { Graph, ForceDirectedLayout, CircularLayout, RandomLayout, SpiralLayout, ShellLayout, SpectralLayout, KamadaKawaiLayout, BipartiteLayout, MultipartiteLayout, BFSLayout } from '../../network-js/src/index.js';
+import { Graph, ForceDirectedLayout, CircularLayout, RandomLayout, SpiralLayout, ShellLayout, SpectralLayout, KamadaKawaiLayout, BipartiteLayout, MultipartiteLayout, BFSLayout, LAYOUT_REGISTRY } from '../../network-js/src/index.js';
 // Import worker URL for Vite
 import workerUrl from '../../network-js/src/compute/network-worker.js?worker&url';
 
@@ -28,6 +28,7 @@ export function createBrazilianNetworksApp(graph) {
     // Data properties
     selectedNetwork: '',
     selectedLayout: 'none',
+    availableLayouts: LAYOUT_REGISTRY.getAll(),  // Get all layouts from registry
     selectedFeatures: [],
     selectedSizeMetric: '',  // NEW: Metric to use for node sizing
     selectedCommunityAlgorithm: 'louvain',

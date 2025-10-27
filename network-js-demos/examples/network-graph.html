@@ -135,17 +135,9 @@
                         x-model="selectedLayout"
                         class="w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 px-3 py-2 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     >
-                        <option value="none">None (D3 Physics)</option>
-                        <option value="random">Random</option>
-                        <option value="circular">Circular</option>
-                        <option value="spiral">Spiral</option>
-                        <option value="shell">Shell</option>
-                        <option value="spectral">Spectral</option>
-                        <option value="force-directed">Force-Directed</option>
-                        <option value="kamada-kawai">Kamada-Kawai</option>
-                        <option value="bipartite">Bipartite</option>
-                        <option value="multipartite">Multipartite</option>
-                        <option value="bfs">BFS Layout</option>
+                        <template x-for="layout in availableLayouts" :key="layout.id">
+                            <option :value="layout.id" x-text="layout.name"></option>
+                        </template>
                     </select>
                 </div>
 
@@ -158,17 +150,14 @@
 
                 <div class="bg-yellow-50 dark:bg-yellow-900/30 rounded-lg p-3">
                     <p class="text-xs text-yellow-800 dark:text-yellow-200">
-                        <strong>None:</strong> D3's built-in physics simulation<br>
-                        <strong>Random:</strong> Random node positioning<br>
-                        <strong>Circular:</strong> Nodes arranged in a circle<br>
-                        <strong>Spiral:</strong> Archimedean spiral arrangement<br>
-                        <strong>Shell:</strong> Concentric circles by degree<br>
-                        <strong>Spectral:</strong> Laplacian eigenvectors (requires analysis)<br>
-                        <strong>Force-Directed:</strong> Spring-electrical model (Fruchterman-Reingold)<br>
-                        <strong>Kamada-Kawai:</strong> Energy minimization based on shortest paths<br>
-                        <strong>Bipartite:</strong> Two-line layout for bipartite graphs<br>
-                        <strong>Multipartite:</strong> Multi-layer layout for hierarchies<br>
-                        <strong>BFS Layout:</strong> Layer-by-layer breadth-first search
+                        <template x-for="layout in availableLayouts" :key="layout.id">
+                            <div>
+                                <strong x-text="`${layout.name}:`"></strong>
+                                <span x-text="layout.description"></span>
+                                <span x-show="layout.requiresStats" class="italic"> (requires analysis)</span>
+                                <br>
+                            </div>
+                        </template>
                     </p>
                 </div>
             </div>

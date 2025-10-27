@@ -1,5 +1,5 @@
 import * as d3 from 'd3';
-import { Graph, ForceDirectedLayout, CircularLayout, RandomLayout, SpiralLayout, ShellLayout, SpectralLayout, KamadaKawaiLayout, BipartiteLayout, MultipartiteLayout, BFSLayout, NetworkStats, CSVAdapter } from '../../network-js/src/index.js';
+import { Graph, ForceDirectedLayout, CircularLayout, RandomLayout, SpiralLayout, ShellLayout, SpectralLayout, KamadaKawaiLayout, BipartiteLayout, MultipartiteLayout, BFSLayout, NetworkStats, CSVAdapter, LAYOUT_REGISTRY } from '../../network-js/src/index.js';
 
 // Alpine.js component for Network Graph controls
 export function createNetworkGraphApp(graph, initialData) {
@@ -7,6 +7,7 @@ export function createNetworkGraphApp(graph, initialData) {
         // Data properties
         selectedDataset: 'default',
         selectedLayout: 'none',
+        availableLayouts: LAYOUT_REGISTRY.getAll(),  // Get all layouts from registry
         isLoading: false,
 
         // Node info display (reactive)
