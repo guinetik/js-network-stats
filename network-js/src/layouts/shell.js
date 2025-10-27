@@ -76,15 +76,21 @@ export default ShellLayout;
  * Compute shell layout with concentric circles - NetworkX implementation
  *
  * Key features:
+ * - **Default behavior**: Auto-groups nodes by degree (hub nodes in center, peripheral in outer rings)
+ * - **Custom grouping**: Accepts nlist parameter for explicit shell definitions
  * - Divides scale evenly among shells (radius_bump = scale / num_shells)
  * - Rotates each shell relative to previous (default rotate = π / num_shells)
  * - Center shell (if single node) at radius 0
  *
- * @param {Object} graphData - Serialized graph data
+ * Default degree grouping creates visual hierarchy:
+ * - Inner shells: High-degree hub nodes
+ * - Outer shells: Low-degree peripheral nodes
+ *
+ * @param {Object} graphData - Serialized graph data (with nodes and edges)
  * @param {Object} options - Layout options
  * @param {number} options.scale - Scale factor for positions (default: 1)
  * @param {Object} options.center - Center point {x, y} (default: {x: 0, y: 0})
- * @param {Array<Array<string>>} options.nlist - Pre-defined node shells
+ * @param {Array<Array<string>>|null} options.nlist - Pre-defined node shells (overrides auto-grouping)
  * @param {number|null} options.rotate - Shell rotation (default: π/num_shells)
  * @param {Function} progressCallback - Progress reporting callback
  * @returns {Object} Node ID -> { x, y }
@@ -119,8 +125,42 @@ export async function shellCompute(graphData, options, progressCallback) {
     // Use provided shells
     shells = nlist;
   } else {
-    // Default: all nodes in one shell
-    shells = [nodes];
+    // Default: auto-group by degree (high degree = center, low degree = outer)
+    // Calculate degree for each node
+    const nodeDegrees = new Map();
+    nodes.forEach(node => {
+      nodeDegrees.set(node, 0);
+    });
+
+    // Count edges for each node
+    if (graphData.edges) {
+      for (const edge of graphData.edges) {
+        const source = edge[0];
+        const target = edge[1];
+        if (nodeDegrees.has(source)) {
+          nodeDegrees.set(source, nodeDegrees.get(source) + 1);
+        }
+        if (nodeDegrees.has(target)) {
+          nodeDegrees.set(target, nodeDegrees.get(target) + 1);
+        }
+      }
+    }
+
+    // Group nodes by degree
+    const degreeGroups = new Map();
+    nodes.forEach(node => {
+      const degree = nodeDegrees.get(node);
+      if (!degreeGroups.has(degree)) {
+        degreeGroups.set(degree, []);
+      }
+      degreeGroups.get(degree).push(node);
+    });
+
+    // Sort degrees in descending order (high degree first = center shells)
+    const sortedDegrees = Array.from(degreeGroups.keys()).sort((a, b) => b - a);
+
+    // Create shells ordered by degree (highest first)
+    shells = sortedDegrees.map(degree => degreeGroups.get(degree));
   }
 
   // Calculate radius increment per shell
