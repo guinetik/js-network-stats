@@ -7,8 +7,11 @@
  * 3. Pass positions to visualization adapter (e.g., D3NetworkAdapter)
  *
  * **Available Layouts**:
- * - `ForceDirectedLayout`: Spring-electrical model (Fruchterman-Reingold)
- * - `CircularLayout`: Circular layout
+ * - `RandomLayout`: Random positioning (O(V))
+ * - `CircularLayout`: Circular layout (O(V))
+ * - `SpiralLayout`: Spiral arrangement (O(V))
+ * - `ShellLayout`: Concentric shells (O(V))
+ * - `ForceDirectedLayout`: Spring-electrical model (O(iterations × V²))
  *
  * **Utilities**:
  * - `rescaleLayout`: Rescale positions to fit in specified range
@@ -18,8 +21,11 @@
  */
 
 export { Layout } from './layout.js';
-export { ForceDirectedLayout } from './force-directed.js';
+export { RandomLayout } from './random.js';
 export { CircularLayout } from './circular.js';
+export { SpiralLayout } from './spiral.js';
+export { ShellLayout } from './shell.js';
+export { ForceDirectedLayout } from './force-directed.js';
 export {
   rescaleLayout,
   randomLayout,

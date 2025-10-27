@@ -1,5 +1,5 @@
 import * as d3 from 'd3';
-import { Graph, ForceDirectedLayout, CircularLayout, NetworkStats, CSVAdapter } from '../../network-js/src/index.js';
+import { Graph, ForceDirectedLayout, CircularLayout, RandomLayout, SpiralLayout, ShellLayout, NetworkStats, CSVAdapter } from '../../network-js/src/index.js';
 
 // Alpine.js component for Network Graph controls
 export function createNetworkGraphApp(graph, initialData) {
@@ -331,19 +331,47 @@ export function createNetworkGraphApp(graph, initialData) {
             // Use smaller of width/height to determine scale
             const scale = Math.min(width, height) / 2.5;
 
-            if (this.selectedLayout === 'circular') {
-                layout = new CircularLayout(currentGraph, {
-                    scale: scale,
-                    center: { x: width / 2, y: height / 2 }
-                });
-                layoutName = 'Circular';
-            } else {
-                layout = new ForceDirectedLayout(currentGraph, {
-                    iterations: 50,
-                    scale: scale,
-                    center: { x: width / 2, y: height / 2 }
-                });
-                layoutName = 'Force-Directed';
+            switch (this.selectedLayout) {
+                case 'random':
+                    layout = new RandomLayout(currentGraph, {
+                        scale: scale,
+                        center: { x: width / 2, y: height / 2 }
+                    });
+                    layoutName = 'Random';
+                    break;
+
+                case 'circular':
+                    layout = new CircularLayout(currentGraph, {
+                        scale: scale,
+                        center: { x: width / 2, y: height / 2 }
+                    });
+                    layoutName = 'Circular';
+                    break;
+
+                case 'spiral':
+                    layout = new SpiralLayout(currentGraph, {
+                        scale: scale,
+                        center: { x: width / 2, y: height / 2 },
+                        spacing: 1.5
+                    });
+                    layoutName = 'Spiral';
+                    break;
+
+                case 'shell':
+                    layout = new ShellLayout(currentGraph, {
+                        scale: scale,
+                        center: { x: width / 2, y: height / 2 }
+                    });
+                    layoutName = 'Shell';
+                    break;
+
+                default:
+                    layout = new ForceDirectedLayout(currentGraph, {
+                        iterations: 50,
+                        scale: scale,
+                        center: { x: width / 2, y: height / 2 }
+                    });
+                    layoutName = 'Force-Directed';
             }
 
             // Compute positions
