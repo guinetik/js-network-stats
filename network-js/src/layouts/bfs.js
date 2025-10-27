@@ -162,22 +162,32 @@ export async function bfsCompute(graphData, options, progressCallback) {
 
   reportProgress(progressCallback, 0.85);
 
-  // Rescale
-  const rescaled = rescaleLayout(posArray, scale);
+  // Rescale - build nodeOrder array to track which nodes correspond to posArray indices
+  const nodeOrder = [];
+  layers.forEach(layer => {
+    layer.forEach(node => {
+      nodeOrder.push(node);
+    });
+  });
+
+  // Convert posArray to positions dictionary for rescaleLayout
+  const positionsDict = {};
+  nodeOrder.forEach((node, i) => {
+    positionsDict[node] = {
+      x: posArray[i][0],
+      y: posArray[i][1]
+    };
+  });
+
+  // Call rescaleLayout with correct signature
+  const rescaledDict = rescaleLayout(positionsDict, nodeOrder, scale, center);
 
   reportProgress(progressCallback, 0.95);
 
-  // Create result dictionary
+  // Create result dictionary from rescaled positions
   const positions = {};
-  let rescaledIdx = 0;
-  layers.forEach(layer => {
-    layer.forEach(node => {
-      positions[node] = {
-        x: rescaled[rescaledIdx][0] + center.x,
-        y: rescaled[rescaledIdx][1] + center.y
-      };
-      rescaledIdx++;
-    });
+  nodeOrder.forEach(node => {
+    positions[node] = rescaledDict[node];
   });
 
   // Handle horizontal/vertical swap
