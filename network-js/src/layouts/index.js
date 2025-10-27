@@ -10,7 +10,8 @@
  * - `RandomLayout`: Random positioning (O(V))
  * - `CircularLayout`: Circular layout (O(V))
  * - `SpiralLayout`: Spiral arrangement (O(V))
- * - `ShellLayout`: Concentric shells (O(V))
+ * - `ShellLayout`: Concentric shells (O(V)) - uses degree for grouping
+ * - `SpectralLayout`: Laplacian eigenvector layout (O(V)) - requires eigenvector-laplacian stat
  * - `ForceDirectedLayout`: Spring-electrical model (O(iterations × V²))
  *
  * **Utilities**:
@@ -25,6 +26,7 @@ export { RandomLayout } from './random.js';
 export { CircularLayout } from './circular.js';
 export { SpiralLayout } from './spiral.js';
 export { ShellLayout } from './shell.js';
+export { SpectralLayout } from './spectral.js';
 export { ForceDirectedLayout } from './force-directed.js';
 export {
   rescaleLayout,
