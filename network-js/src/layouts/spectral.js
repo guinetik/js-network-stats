@@ -97,7 +97,8 @@ export async function spectralCompute(graphData, options, progressCallback) {
 
   const {
     scale = 1,
-    center = { x: 0, y: 0 }
+    center = { x: 0, y: 0 },
+    nodeProperties = null  // Map of node ID -> {laplacian_x, laplacian_y}
   } = options || {};
 
   // Handle edge cases
@@ -116,9 +117,8 @@ export async function spectralCompute(graphData, options, progressCallback) {
   const positions = {};
   const coords = [];  // Array of [x, y] for rescaling
 
-  // Get laplacian coordinates from graphData.nodeProperties or nodes directly
-  // graphData.nodeProperties is passed from layout options when available
-  const nodeProps = graphData.nodeProperties || new Map();
+  // Get laplacian coordinates from options.nodeProperties (pre-computed during analysis)
+  const nodeProps = nodeProperties || new Map();
 
   for (const node of nodes) {
     let x, y;
