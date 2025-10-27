@@ -19,6 +19,9 @@ export function createNetworkGraphApp(graph, initialData) {
         // Name counter for dynamic node creation
         nameCounter: 1,
 
+        // Layout state (prevent infinite loops)
+        isApplyingLayout: false,
+
         // Initialization
         init() {
             // Store reference to initial data
@@ -243,6 +246,15 @@ export function createNetworkGraphApp(graph, initialData) {
                 graph.setData(newData.nodes, newData.links);
                 // Theme will automatically apply colors
 
+                // Auto-apply selected layout if it's not "none" AND we're not already applying a layout
+                if (this.selectedLayout !== 'none' && !this.isApplyingLayout) {
+                    console.log(`Auto-applying selected layout: ${this.selectedLayout}`);
+                    // Small delay to ensure graph is fully rendered
+                    setTimeout(() => {
+                        this.applyLayoutAlgorithm();
+                    }, 500);
+                }
+
             } catch (error) {
                 console.error('Failed to load dataset:', error);
                 this.setNodeInfo('error', `Failed to load ${this.selectedDataset} dataset`);
@@ -252,25 +264,33 @@ export function createNetworkGraphApp(graph, initialData) {
         },
 
         async applyLayoutAlgorithm() {
+            // Set flag to prevent infinite loops
+            this.isApplyingLayout = true;
+
             const container = document.getElementById('graph-container');
             const width = container.clientWidth;
             const height = container.clientHeight;
 
-            // Handle "None" - re-enable D3 physics
+            // Handle "None" - re-enable D3 physics (no loading needed)
             if (this.selectedLayout === 'none') {
+                // Clear custom layout flag
+                graph.customLayoutActive = false;
+
                 // Unfix all nodes
                 graph.data.nodes.forEach(node => {
                     node.fx = null;
                     node.fy = null;
                 });
 
-                // Re-enable all D3 forces
+                // Re-enable all D3 forces (matching initSimulation configuration)
                 graph.simulation
-                    .force('charge', d3.forceManyBody().strength(-300))
-                    .force('link', d3.forceLink(graph.data.links).id(d => d.id).distance(100))
-                    .force('center', d3.forceCenter(width / 2, height / 2))
-                    .force('x', d3.forceX(width / 2).strength(0.1))
-                    .force('y', d3.forceY(height / 2).strength(0.1))
+                    .force('charge', d3.forceManyBody().strength(-800).distanceMax(800))
+                    .force('link', d3.forceLink(graph.data.links).id(d => d.id).distance(100).strength(0.5))
+                    .force('center', d3.forceCenter(width / 2, height / 2).strength(0.05))
+                    .force('x', d3.forceX(width / 2).strength(0.03))
+                    .force('y', d3.forceY(height / 2).strength(0.03))
+                    .force('collision', d3.forceCollide().radius(d => 6 + (d.centrality || 0) * 14).strength(0.7))
+                    .force('boundary', graph.createBoundaryForce())
                     .alpha(1)
                     .restart();
 
@@ -278,9 +298,16 @@ export function createNetworkGraphApp(graph, initialData) {
                     description: "Using D3's built-in force simulation"
                 });
 
+                // Clear flag
+                this.isApplyingLayout = false;
+
                 // Theme will automatically handle colors
                 return;
             }
+
+            // Show loading state for custom layouts
+            graph.hideGraphDuringCalculation();
+            this.setNodeInfo('loading', 'Calculating layout positions...');
 
             // Build Graph object from current data
             const currentGraph = new Graph();
@@ -300,27 +327,30 @@ export function createNetworkGraphApp(graph, initialData) {
             // Create appropriate layout
             let layout;
             let layoutName;
+
+            // Use smaller of width/height to determine scale
+            const scale = Math.min(width, height) / 2.5;
+
             if (this.selectedLayout === 'circular') {
-                layout = new CircularLayout(currentGraph, null, {
-                    width: width,
-                    height: height,
-                    springLength: 100,
-                    maxIterations: 50
+                layout = new CircularLayout(currentGraph, {
+                    scale: scale,
+                    center: { x: width / 2, y: height / 2 }
                 });
                 layoutName = 'Circular';
             } else {
-                layout = new ForceDirectedLayout(currentGraph, null, {
-                    width: width,
-                    height: height,
-                    iterations: 100,
-                    repulsion: 50000,
-                    attraction: 0.1
+                layout = new ForceDirectedLayout(currentGraph, {
+                    iterations: 50,
+                    scale: scale,
+                    center: { x: width / 2, y: height / 2 }
                 });
                 layoutName = 'Force-Directed';
             }
 
             // Compute positions
             const positions = await layout.getPositions();
+
+            // Set custom layout flag to prevent D3 simulation from restarting
+            graph.customLayoutActive = true;
 
             // DISABLE D3 forces to prevent interference
             graph.simulation
@@ -341,13 +371,19 @@ export function createNetworkGraphApp(graph, initialData) {
                 }
             });
 
-            // Update visualization
+            // Show graph now that positions are calculated
+            graph.showGraphAfterCalculation();
+
+            // Update visualization (will happen in showGraphAfterCalculation, but call again to ensure)
             graph.updatePositions();
 
             // Update info
             this.setNodeInfo('layout-applied', `Layout Applied: ${layoutName}`, {
                 description: 'Nodes fixed in position (D3 physics disabled)'
             });
+
+            // Clear flag
+            this.isApplyingLayout = false;
 
             // Theme will automatically handle colors
         }

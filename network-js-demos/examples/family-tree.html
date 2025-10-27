@@ -157,6 +157,7 @@
     <!-- Back Button -->
     <a
         href="../index.html"
+        onclick="window.familyTreeCleanup && window.familyTreeCleanup()"
         class="fixed top-4 right-4 z-50 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg shadow-lg transition-colors"
     >
         ← Back to Home
@@ -304,6 +305,14 @@
 
         <!-- Right Panel: Graph Visualization -->
         <div class="lg:w-2/3 relative" id="graph-container">
+            <!-- Loading Indicator -->
+            <div id="graph-loading" class="absolute inset-0 flex items-center justify-center bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm z-50" style="display: none;">
+                <div class="text-center">
+                    <div class="inline-block animate-spin rounded-full h-16 w-16 border-4 border-green-600 border-t-transparent mb-4"></div>
+                    <p class="text-lg font-semibold text-gray-900 dark:text-gray-100">Calculating graph layout...</p>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mt-2">This may take a few seconds for large networks</p>
+                </div>
+            </div>
             <!-- Graph will be rendered here by D3 -->
         </div>
     </div>
@@ -397,7 +406,55 @@
         }
 
         // Auto-save every 30 seconds
-        setInterval(saveFamily, 30000);
+        let autoSaveInterval = setInterval(saveFamily, 30000);
+
+        // Cleanup function
+        const cleanup = () => {
+            if (autoSaveInterval) {
+                clearInterval(autoSaveInterval);
+                autoSaveInterval = null;
+                console.log('Family tree auto-save stopped');
+            }
+            if (graph) {
+                graph.destroy();
+            }
+        };
+
+        // Expose cleanup globally for navigation button
+        window.familyTreeCleanup = cleanup;
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', cleanup);
+
+        // Cleanup on page hide (more reliable for BFCache)
+        window.addEventListener('pagehide', cleanup);
+
+        // Cleanup on visibility change (when switching pages in SPA)
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                // Page is hidden, clear interval
+                if (autoSaveInterval) {
+                    clearInterval(autoSaveInterval);
+                    autoSaveInterval = null;
+                    console.log('Family tree auto-save paused');
+                }
+            } else {
+                // Page is visible again, restart interval if needed
+                if (!autoSaveInterval) {
+                    autoSaveInterval = setInterval(saveFamily, 30000);
+                    console.log('Family tree auto-save resumed');
+                }
+            }
+        });
+
+        // Handle BFCache (back-forward cache) restoration
+        window.addEventListener('pageshow', (event) => {
+            if (event.persisted) {
+                // Page was restored from BFCache - force a clean reset
+                console.log('Page restored from BFCache - resetting state');
+                location.reload();
+            }
+        });
 
         // Register Alpine component for family tree controls
         // Create the component object once with all dependencies

@@ -201,7 +201,7 @@ export class D3Theme {
     selection
       .attr('stroke', options.stroke || colors.linkStroke)
       .attr('stroke-opacity', options.opacity ?? colors.linkStrokeOpacity)
-      .attr('stroke-width', options.width || 1.5);
+      .attr('stroke-width', options.width || 0.75);
 
     return selection;
   }
@@ -267,7 +267,7 @@ export class D3Theme {
 
     selection
       .attr('stroke', colors.linkStrokeHighlight)
-      .attr('stroke-width', 3)
+      .attr('stroke-width', 1.5)
       .attr('stroke-opacity', 1);
 
     return selection;

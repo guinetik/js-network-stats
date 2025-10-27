@@ -69,6 +69,9 @@ export function createBrazilianNetworksApp(graph) {
     // Community detection
     hasCommunities: false,
 
+    // Layout state (prevent infinite loops)
+    isApplyingLayout: false,
+
     // Node info display (reactive)
     nodeInfo: {
       type: 'default',
@@ -167,11 +170,34 @@ export function createBrazilianNetworksApp(graph) {
         graph.data.nodes = nodes;
         graph.data.links = links;
 
+        // Set loading indicator to "Calculating layout..."
+        this.setNodeInfo('loading', 'Calculating graph layout...');
+
+        // Set callback for when graph calculation completes
+        graph.onCalculationComplete = async () => {
+          this.networkLoaded = true;
+          this.isLoading = false;
+          this.setNodeInfo('success', `Loaded: ${config.name}`, {
+            nodes: nodes.length,
+            edges: links.length,
+            description: config.description
+          });
+          console.log('Network loaded successfully (structure only, no stats calculated)');
+
+          // Auto-apply selected layout if it's not "none" AND we're not already applying a layout
+          if (this.selectedLayout !== 'none' && !this.isApplyingLayout) {
+            console.log(`Auto-applying selected layout: ${this.selectedLayout}`);
+            // Small delay to ensure graph is fully rendered
+            setTimeout(() => {
+              this.applyLayoutAlgorithm();
+            }, 100);
+          }
+        };
+
         // Render the graph structure (no metrics calculation - pass false)
         graph.updateGraph(false);
 
-        this.networkLoaded = true;
-        this.isLoading = false;
+        // Don't set isLoading = false yet - wait for calculation to complete
         this.hasCommunities = false;
         this.analysisResults = null;
 
@@ -180,13 +206,6 @@ export function createBrazilianNetworksApp(graph) {
         this.stats.modularity = null;
         this.stats.communities = null;
 
-        this.setNodeInfo('success', `Loaded: ${config.name}`, {
-          nodes: nodes.length,
-          edges: links.length,
-          description: config.description
-        });
-
-        console.log('Network loaded successfully (structure only, no stats calculated)');
       } catch (error) {
         console.error('Error loading network:', error);
         this.setNodeInfo('error', `Failed to load network: ${error.message}`);
@@ -375,12 +394,18 @@ export function createBrazilianNetworksApp(graph) {
     },
 
     async applyLayoutAlgorithm() {
+      // Set flag to prevent infinite loops
+      this.isApplyingLayout = true;
+
       const container = document.getElementById('graph-container');
       const width = container.clientWidth;
       const height = container.clientHeight;
 
       // Handle "None" - re-enable D3 physics
       if (this.selectedLayout === 'none') {
+        // Clear custom layout flag
+        graph.customLayoutActive = false;
+
         // Unfix all nodes
         graph.data.nodes.forEach(node => {
           node.fx = null;
@@ -405,8 +430,14 @@ export function createBrazilianNetworksApp(graph) {
           description: "Using D3's built-in force simulation"
         });
 
+        // Clear flag
+        this.isApplyingLayout = false;
         return;
       }
+
+      // Show loading state for custom layouts
+      graph.hideGraphDuringCalculation();
+      this.setNodeInfo('loading', 'Calculating layout positions...');
 
       // Build Graph object from current data
       const currentGraph = new Graph();
@@ -426,27 +457,30 @@ export function createBrazilianNetworksApp(graph) {
       // Create appropriate layout
       let layout;
       let layoutName;
+
+      // Use smaller of width/height to determine scale
+      const scale = Math.min(width, height) / 2.5;
+
       if (this.selectedLayout === 'circular') {
-        layout = new CircularLayout(currentGraph, null, {
-          width: width,
-          height: height,
-          springLength: 100,
-          maxIterations: 50
+        layout = new CircularLayout(currentGraph, {
+          scale: scale,
+          center: { x: width / 2, y: height / 2 }
         });
         layoutName = 'Circular';
       } else {
-        layout = new ForceDirectedLayout(currentGraph, null, {
-          width: width,
-          height: height,
-          iterations: 100,
-          repulsion: 50000,
-          attraction: 0.1
+        layout = new ForceDirectedLayout(currentGraph, {
+          iterations: 50,
+          scale: scale,
+          center: { x: width / 2, y: height / 2 }
         });
         layoutName = 'Force-Directed';
       }
 
       // Compute positions
       const positions = await layout.getPositions();
+
+      // Set custom layout flag to prevent D3 simulation from restarting
+      graph.customLayoutActive = true;
 
       // DISABLE ALL D3 forces to prevent interference
       graph.simulation
@@ -472,13 +506,19 @@ export function createBrazilianNetworksApp(graph) {
         }
       });
 
-      // Update visualization
+      // Show graph now that positions are calculated
+      graph.showGraphAfterCalculation();
+
+      // Update visualization (will happen in showGraphAfterCalculation, but call again to ensure)
       graph.updatePositions();
 
       // Update info
       this.setNodeInfo('layout-applied', `Layout Applied: ${layoutName}`, {
         description: 'Nodes fixed in position (D3 physics disabled)'
       });
+
+      // Clear flag
+      this.isApplyingLayout = false;
     }
   };
 }

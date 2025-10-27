@@ -508,6 +508,14 @@
 
         <!-- Right Panel: Graph Visualization -->
         <div class="lg:w-2/3 relative" id="graph-container">
+            <!-- Loading Indicator -->
+            <div id="graph-loading" class="absolute inset-0 flex items-center justify-center bg-white/90 dark:bg-gray-900/90 backdrop-blur-sm z-50" style="display: none;">
+                <div class="text-center">
+                    <div class="inline-block animate-spin rounded-full h-16 w-16 border-4 border-green-600 border-t-transparent mb-4"></div>
+                    <p class="text-lg font-semibold text-gray-900 dark:text-gray-100">Calculating graph layout...</p>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mt-2">This may take a few seconds for large networks</p>
+                </div>
+            </div>
             <!-- Graph will be rendered here by NetworkGraph -->
         </div>
     </div>
@@ -536,7 +544,7 @@
         });
 
         // Handle window resize
-        window.addEventListener('resize', () => {
+        const handleResize = () => {
             const newWidth = container.clientWidth;
             const newHeight = container.clientHeight;
             graph.width = newWidth;
@@ -545,6 +553,45 @@
             graph.simulation.force('center', d3.forceCenter(newWidth / 2, newHeight / 2));
             graph.simulation.force('x', d3.forceX(newWidth / 2).strength(0.1));
             graph.simulation.force('y', d3.forceY(newHeight / 2).strength(0.1));
+        };
+        window.addEventListener('resize', handleResize);
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            window.removeEventListener('resize', handleResize);
+            if (graph) {
+                graph.destroy();
+            }
+        });
+
+        // Cleanup on visibility change (when switching pages in SPA)
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && graph && graph.simulation) {
+                // Pause simulation when page is hidden
+                graph.simulation.stop();
+            } else if (!document.hidden && graph && graph.simulation) {
+                // Resume simulation when page becomes visible
+                graph.simulation.restart();
+            }
+        });
+
+        // Handle BFCache (back-forward cache) restoration
+        window.addEventListener('pageshow', (event) => {
+            if (event.persisted) {
+                // Page was restored from BFCache - force a clean reset
+                console.log('Page restored from BFCache - resetting state');
+
+                // Clear the graph
+                if (graph) {
+                    graph.data.nodes = [];
+                    graph.data.links = [];
+                    graph.updateGraph();
+                }
+
+                // Reset Alpine state by forcing a page reload
+                // This ensures everything starts fresh
+                location.reload();
+            }
         });
 
         // Register Alpine component
