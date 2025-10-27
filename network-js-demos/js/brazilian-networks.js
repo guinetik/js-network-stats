@@ -253,6 +253,8 @@ export function createBrazilianNetworksApp(graph) {
           resultsMap.set(nodeResult.id.toString(), nodeResult);
         });
 
+        console.log('Analysis complete. Sample node result:', results.nodes[0]);
+
         // Apply all metrics to graph nodes
         graph.data.nodes.forEach(node => {
           const result = resultsMap.get(node.id.toString());
@@ -260,6 +262,11 @@ export function createBrazilianNetworksApp(graph) {
             Object.assign(node, result);
           }
         });
+
+        // Debug: check if laplacian data was merged
+        if (this.selectedFeatures.includes('eigenvector-laplacian')) {
+          console.log('Eigenvector-laplacian selected. Sample node after merge:', graph.data.nodes[0]);
+        }
 
         // Calculate primary metric for node sizing (use selected size metric or first feature)
         const primaryMetric = this.selectedSizeMetric || this.selectedFeatures[0];
@@ -508,6 +515,7 @@ export function createBrazilianNetworksApp(graph) {
           // Build nodeProperties map with Laplacian eigenvector coordinates if available
           const spectralPropsMap = new Map();
           let hasSpectralData = false;
+          console.log('Checking spectral data on', graph.data.nodes.length, 'nodes');
           graph.data.nodes.forEach(node => {
             if (node.laplacian_x !== undefined && node.laplacian_y !== undefined) {
               spectralPropsMap.set(node.id, {
@@ -517,6 +525,8 @@ export function createBrazilianNetworksApp(graph) {
               hasSpectralData = true;
             }
           });
+
+          console.log('Spectral data found:', hasSpectralData, 'nodes with data:', spectralPropsMap.size);
 
           if (!hasSpectralData) {
             this.setNodeInfo('error', 'Spectral layout requires eigenvector-laplacian stat. Include it in "Analyze Network".');
@@ -530,6 +540,7 @@ export function createBrazilianNetworksApp(graph) {
             nodeProperties: spectralPropsMap.size > 0 ? spectralPropsMap : null
           });
           layoutName = 'Spectral';
+          console.log('SpectralLayout created, computing positions...');
           break;
 
         default:

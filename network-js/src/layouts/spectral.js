@@ -95,11 +95,15 @@ export async function spectralCompute(graphData, options, progressCallback) {
   const nodes = Array.from(graphData.nodes || []);
   const n = nodes.length;
 
+  console.log('[spectralCompute] Starting with', n, 'nodes');
+
   const {
     scale = 1,
     center = { x: 0, y: 0 },
     nodeProperties = null  // Map of node ID -> {laplacian_x, laplacian_y}
   } = options || {};
+
+  console.log('[spectralCompute] nodeProperties:', nodeProperties ? `Map with ${nodeProperties.size} entries` : 'null');
 
   // Handle edge cases
   if (n === 0) {
@@ -119,6 +123,8 @@ export async function spectralCompute(graphData, options, progressCallback) {
 
   // Get laplacian coordinates from options.nodeProperties (pre-computed during analysis)
   const nodeProps = nodeProperties || new Map();
+
+  console.log('[spectralCompute] Processing', n, 'nodes for eigenvector extraction');
 
   for (const node of nodes) {
     let x, y;
@@ -152,10 +158,14 @@ export async function spectralCompute(graphData, options, progressCallback) {
     coords.push([x, y]);
   }
 
+  console.log('[spectralCompute] Extracted', coords.length, 'coordinates. Sample:', coords[0]);
+
   reportProgress(progressCallback, 0.5);
 
   // Rescale to fit in [-scale, scale]
+  console.log('[spectralCompute] Starting rescaleLayout...');
   const rescaled = rescaleLayout(coords, scale);
+  console.log('[spectralCompute] Rescaled. Sample:', rescaled[0]);
 
   reportProgress(progressCallback, 0.99);
 
@@ -167,7 +177,10 @@ export async function spectralCompute(graphData, options, progressCallback) {
     };
   });
 
+  console.log('[spectralCompute] Created positions for', Object.keys(positions).length, 'nodes');
+
   reportProgress(progressCallback, 1.0);
+  console.log('[spectralCompute] Completed successfully');
   return positions;
 }
 
