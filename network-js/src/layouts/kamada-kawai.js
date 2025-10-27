@@ -156,6 +156,28 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
   try {
     distances = computeAllPairsShortestPaths(graph, nodes);
     console.log('[Kamada-Kawai] All-pairs shortest paths computed successfully');
+
+    // Debug: Check for infinite or NaN distances
+    let hasInfinity = false, hasNaN = false;
+    let infinityCount = 0, nanCount = 0;
+    for (let i = 0; i < distances.length; i++) {
+      for (let j = 0; j < distances[i].length; j++) {
+        if (!isFinite(distances[i][j])) {
+          hasInfinity = distances[i][j] === Infinity;
+          hasNaN = isNaN(distances[i][j]);
+          if (hasInfinity) infinityCount++;
+          if (hasNaN) nanCount++;
+        }
+      }
+    }
+    if (infinityCount > 0 || nanCount > 0) {
+      console.warn('[Kamada-Kawai] Distances contain problematic values:', {
+        infinityCount,
+        nanCount,
+        totalDistances: distances.length * distances[0].length,
+        sample: distances[0].slice(0, 5)
+      });
+    }
   } catch (err) {
     console.error('[Kamada-Kawai] Error in computeAllPairsShortestPaths:', err.message, err.stack);
     throw err;
@@ -209,6 +231,12 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
       const node = nodes[i];
       const [xi, yi] = pos[i];
 
+      // Safety check: detect NaN early
+      if (isNaN(xi) || isNaN(yi)) {
+        console.error('[Kamada-Kawai] NaN detected at iteration', iter, 'node index', i, 'node:', node, 'pos:', pos[i]);
+        throw new Error(`NaN in position at iteration ${iter}, node ${node}`);
+      }
+
       // Calculate gradient
       let dxi = 0;
       let dyi = 0;
@@ -222,6 +250,12 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
         const rij = Math.sqrt(dx * dx + dy * dy);
         const dij = distances[i][j];
 
+        // Debug: check for problematic values
+        if (!isFinite(dij)) {
+          console.warn('[Kamada-Kawai] Non-finite distance at iteration', iter, 'nodes', i, j, 'dij:', dij);
+          continue;
+        }
+
         if (rij === 0) continue; // Skip if nodes are at same position
 
         const lij = Kval * dij;
@@ -229,13 +263,32 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
 
         // Spring force
         const Fspring = (rijOverLij - 1) / dij;
+
+        // Check for NaN in force calculation
+        if (!isFinite(Fspring)) {
+          console.warn('[Kamada-Kawai] Non-finite Fspring at iteration', iter, 'Fspring:', Fspring, 'rijOverLij:', rijOverLij, 'dij:', dij);
+          continue;
+        }
+
         dxi += Fspring * dx;
         dyi += Fspring * dy;
+      }
+
+      // Check for NaN before updating position
+      if (isNaN(dxi) || isNaN(dyi)) {
+        console.warn('[Kamada-Kawai] NaN in delta at iteration', iter, 'node', i, 'dxi:', dxi, 'dyi:', dyi);
+        dxi = isNaN(dxi) ? 0 : dxi;
+        dyi = isNaN(dyi) ? 0 : dyi;
       }
 
       delta += Math.sqrt(dxi * dxi + dyi * dyi);
       pos[i][0] -= dxi;
       pos[i][1] -= dyi;
+
+      // Safety check after update
+      if (isNaN(pos[i][0]) || isNaN(pos[i][1])) {
+        console.error('[Kamada-Kawai] Position became NaN after update at iteration', iter, 'node', i, 'delta was:', dxi, dyi, 'position:', pos[i]);
+      }
     }
 
     reportProgress(progressCallback, 0.4 + (0.6 * (iter + 1) / iterations));
