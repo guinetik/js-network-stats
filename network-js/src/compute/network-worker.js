@@ -50,6 +50,14 @@ self.onmessage = async function(event) {
       throw new Error('Invalid task: module and functionName are required');
     }
 
+    // Debug: Log task being processed
+    console.log('[network-worker] Processing task:', {
+      id,
+      module,
+      functionName,
+      argsLength: args?.length || 0
+    });
+
     // Create progress callback that reports back to main thread
     const progressCallback = (progress) => {
       self.postMessage({
@@ -66,8 +74,22 @@ self.onmessage = async function(event) {
       // Node.js: use require (dynamic import may not work in some Node versions)
       algorithmModule = require(module);
     } else {
-      // Browser: use dynamic import
-      algorithmModule = await import(module);
+      // Browser: use dynamic import with proper URL resolution
+      // Resolve module path relative to this worker file
+      let moduleUrl = module;
+      if (!module.startsWith('/') && !module.startsWith('http')) {
+        // For relative paths, resolve them relative to the worker's location
+        try {
+          moduleUrl = new URL(module, import.meta.url).href;
+          console.log(`[network-worker] Resolved module path: '${module}' -> '${moduleUrl}'`);
+        } catch (e) {
+          // If URL constructor fails, fall back to the original module path
+          console.warn(`[network-worker] Failed to resolve module URL for '${module}':`, e.message);
+        }
+      }
+      console.log(`[network-worker] Importing module: '${moduleUrl}'`);
+      algorithmModule = await import(moduleUrl);
+      console.log(`[network-worker] Successfully imported module. Exports:`, Object.keys(algorithmModule || {}));
     }
 
     // Get the compute function

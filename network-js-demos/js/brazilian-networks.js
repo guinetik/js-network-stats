@@ -451,12 +451,14 @@ export function createBrazilianNetworksApp(graph) {
       const currentGraph = new Graph();
 
       // Add all nodes
-      graph.data.nodes.forEach(node => {
+      const nodesArray = Array.isArray(graph.data.nodes) ? graph.data.nodes : Array.from(graph.data.nodes);
+      nodesArray.forEach(node => {
         currentGraph.addNode(node.id);
       });
 
       // Add all edges
-      graph.data.links.forEach(link => {
+      const linksArray = Array.isArray(graph.data.links) ? graph.data.links : Array.from(graph.data.links);
+      linksArray.forEach(link => {
         const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
         const targetId = typeof link.target === 'object' ? link.target.id : link.target;
         currentGraph.addEdge(sourceId, targetId, link.weight || 1);
