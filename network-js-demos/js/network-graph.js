@@ -41,8 +41,8 @@ export function createNetworkGraphApp(graph, initialData) {
             };
         },
 
-        // Community detection function
-        detectCommunities(graphData) {
+        // Community detection function (NOW ASYNC!)
+        async detectCommunities(graphData) {
             try {
                 // Convert to NetworkStats format (edge list)
                 const network = graphData.links.map(link => ({
@@ -51,9 +51,9 @@ export function createNetworkGraphApp(graph, initialData) {
                     weight: link.weight || 1
                 }));
 
-                // Run modularity (community detection)
+                // Run modularity (community detection) - NOW WITH AWAIT!
                 const analyzer = new NetworkStats({ verbose: false });
-                const stats = analyzer.analyze(network, ['modularity']);
+                const stats = await analyzer.analyze(network, ['modularity']);
 
                 // Extract community assignments
                 const communities = {};
@@ -173,8 +173,8 @@ export function createNetworkGraphApp(graph, initialData) {
                     }));
                     delete newData.edges;
 
-                    // Detect communities using modularity
-                    const communities = this.detectCommunities(newData);
+                    // Detect communities using modularity (AWAIT!)
+                    const communities = await this.detectCommunities(newData);
 
                     // Apply community groups to nodes
                     newData.nodes = newData.nodes.map(node => ({
@@ -208,8 +208,8 @@ export function createNetworkGraphApp(graph, initialData) {
                     }));
                     delete newData.edges;
 
-                    // Detect communities using modularity
-                    const communities = this.detectCommunities(newData);
+                    // Detect communities using modularity (AWAIT!)
+                    const communities = await this.detectCommunities(newData);
 
                     // Apply community groups to nodes
                     newData.nodes = newData.nodes.map(node => ({

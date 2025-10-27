@@ -105,9 +105,9 @@ export class NetworkAdapter {
    *
    * @param {Array} nodes - Array of node objects {id, group, ...}
    * @param {Array} links - Array of link objects {source, target, ...}
-   * @returns {Object} Graph data with enriched nodes {nodes, links}
+   * @returns {Promise<Object>} Graph data with enriched nodes {nodes, links}
    */
-  setData(nodes, links) {
+  async setData(nodes, links) {
     // Store the original data
     this.nodes = [...nodes];
     this.links = [...links];
@@ -130,7 +130,7 @@ export class NetworkAdapter {
     let metrics = [];
     if (connections.length > 0) {
       try {
-        metrics = this.analyzer.analyze(connections, this.options.features);
+        metrics = await this.analyzer.analyze(connections, this.options.features);
       } catch (error) {
         console.error('Network analysis failed:', error);
         // Return basic metrics if analysis fails
@@ -151,32 +151,32 @@ export class NetworkAdapter {
    * Add a node to the graph
    *
    * @param {Object} node - Node object {id, group, ...}
-   * @returns {Object} Updated graph data {nodes, links}
+   * @returns {Promise<Object>} Updated graph data {nodes, links}
    */
-  addNode(node) {
+  async addNode(node) {
     this.nodes.push(node);
     this.nodeMap.set(node.id, node);
-    return this.setData(this.nodes, this.links);
+    return await this.setData(this.nodes, this.links);
   }
 
   /**
    * Add a link to the graph
    *
    * @param {Object} link - Link object {source, target, weight}
-   * @returns {Object} Updated graph data {nodes, links}
+   * @returns {Promise<Object>} Updated graph data {nodes, links}
    */
-  addLink(link) {
+  async addLink(link) {
     this.links.push(link);
-    return this.setData(this.nodes, this.links);
+    return await this.setData(this.nodes, this.links);
   }
 
   /**
    * Remove a node from the graph
    *
    * @param {string} nodeId - ID of node to remove
-   * @returns {Object} Updated graph data {nodes, links}
+   * @returns {Promise<Object>} Updated graph data {nodes, links}
    */
-  removeNode(nodeId) {
+  async removeNode(nodeId) {
     // Remove the node
     this.nodes = this.nodes.filter(n => n.id !== nodeId);
     this.nodeMap.delete(nodeId);
@@ -188,7 +188,7 @@ export class NetworkAdapter {
       return sourceId !== nodeId && targetId !== nodeId;
     });
 
-    return this.setData(this.nodes, this.links);
+    return await this.setData(this.nodes, this.links);
   }
 
   /**
@@ -196,9 +196,9 @@ export class NetworkAdapter {
    *
    * @param {string} sourceId - Source node ID
    * @param {string} targetId - Target node ID
-   * @returns {Object} Updated graph data {nodes, links}
+   * @returns {Promise<Object>} Updated graph data {nodes, links}
    */
-  removeLink(sourceId, targetId) {
+  async removeLink(sourceId, targetId) {
     this.links = this.links.filter(link => {
       const linkSource = typeof link.source === 'object' ? link.source.id : link.source;
       const linkTarget = typeof link.target === 'object' ? link.target.id : link.target;
@@ -209,7 +209,7 @@ export class NetworkAdapter {
       );
     });
 
-    return this.setData(this.nodes, this.links);
+    return await this.setData(this.nodes, this.links);
   }
 
   /**
@@ -244,11 +244,11 @@ export class NetworkAdapter {
    * Recompute metrics with different features
    *
    * @param {Array<string>} features - Features to compute
-   * @returns {Object} Updated graph data {nodes, links}
+   * @returns {Promise<Object>} Updated graph data {nodes, links}
    */
-  recompute(features) {
+  async recompute(features) {
     this.options.features = features;
-    return this.setData(this.nodes, this.links);
+    return await this.setData(this.nodes, this.links);
   }
 }
 

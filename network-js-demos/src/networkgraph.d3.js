@@ -19,6 +19,16 @@ export default class NetworkGraph {
     this.nodeInfoCallback = null;
     this.nodeInfoHideCallback = null;
 
+    // Worker options
+    this.useWorker = options.useWorker !== false; // Default true
+    this.workerThreshold = options.workerThreshold || 1000; // Use worker for networks > 1000 edges
+    this.worker = null;
+    this.isUsingWorker = false;
+
+    // Fluid mode for large networks (let network expand naturally, then zoom to fit)
+    this.fluidThreshold = options.fluidThreshold || 1000; // Use fluid mode for networks > 1000 edges
+    this.isFluidMode = false;
+
     // Initialize the network adapter (bridge to @guinetik/network-js)
     this.adapter = new NetworkAdapter({
       features: options.features || ['degree', 'eigenvector'],
@@ -64,6 +74,153 @@ export default class NetworkGraph {
     if (this.simulation) {
       this.simulation.stop();
     }
+    if (this.worker) {
+      this.worker.terminate();
+      this.worker = null;
+    }
+  }
+
+  /**
+   * Initialize worker for large networks
+   */
+  initWorker() {
+    if (this.worker) {
+      this.worker.terminate();
+    }
+
+    try {
+      this.worker = new Worker(new URL('./d3-force-worker.js', import.meta.url), { type: 'module' });
+
+      this.worker.addEventListener('message', (event) => {
+        const { type, positions, alpha } = event.data;
+
+        switch (type) {
+          case 'ready':
+            console.log('D3 Force Worker ready');
+            break;
+          case 'tick':
+            this.applyWorkerPositions(positions);
+            // In fluid mode, fit to view once simulation stabilizes
+            if (this.isFluidMode && this.pendingFitToView && alpha < 0.05) {
+              this.pendingFitToView = false;
+              setTimeout(() => this.fitToView(), 500);
+            }
+            break;
+          case 'end':
+            console.log('D3 Force simulation complete');
+            this.applyWorkerPositions(positions);
+            // Fit to view at end if we haven't already
+            if (this.isFluidMode && this.pendingFitToView) {
+              this.pendingFitToView = false;
+              setTimeout(() => this.fitToView(), 100);
+            }
+            break;
+          case 'stopped':
+            console.log('D3 Force worker stopped');
+            break;
+          default:
+            break;
+        }
+      });
+
+      this.worker.addEventListener('error', (error) => {
+        console.error('D3 Force Worker error:', error);
+        // Fallback to main thread simulation
+        this.isUsingWorker = false;
+        this.initSimulation();
+        this.updateGraph();
+      });
+
+      this.isUsingWorker = true;
+      return true;
+    } catch (error) {
+      console.error('Failed to initialize worker:', error);
+      this.isUsingWorker = false;
+      return false;
+    }
+  }
+
+  /**
+   * Apply positions from worker to nodes
+   */
+  applyWorkerPositions(positions) {
+    const posMap = new Map(positions.map(p => [p.id, p]));
+
+    this.data.nodes.forEach(node => {
+      const pos = posMap.get(node.id);
+      if (pos) {
+        node.x = pos.x;
+        node.y = pos.y;
+        if (pos.vx !== undefined) node.vx = pos.vx;
+        if (pos.vy !== undefined) node.vy = pos.vy;
+      }
+    });
+
+    // Update visualization
+    this.updatePositions();
+  }
+
+  /**
+   * Check if worker should be used based on network size
+   */
+  shouldUseWorker() {
+    return this.useWorker &&
+           typeof Worker !== 'undefined' &&
+           this.data.links.length > this.workerThreshold;
+  }
+
+  /**
+   * Calculate bounding box of all nodes and zoom to fit
+   */
+  fitToView(padding = 50) {
+    if (this.data.nodes.length === 0) return;
+
+    // Calculate bounds
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    this.data.nodes.forEach(node => {
+      if (node.x < minX) minX = node.x;
+      if (node.y < minY) minY = node.y;
+      if (node.x > maxX) maxX = node.x;
+      if (node.y > maxY) maxY = node.y;
+    });
+
+    // Add padding
+    minX -= padding;
+    minY -= padding;
+    maxX += padding;
+    maxY += padding;
+
+    const graphWidth = maxX - minX;
+    const graphHeight = maxY - minY;
+    const graphCenterX = (minX + maxX) / 2;
+    const graphCenterY = (minY + maxY) / 2;
+
+    // Calculate scale to fit
+    const scaleX = this.width / graphWidth;
+    const scaleY = this.height / graphHeight;
+    const scale = Math.min(scaleX, scaleY, 1); // Don't zoom in beyond 1x
+
+    // Calculate translation to center
+    const translateX = this.width / 2 - graphCenterX * scale;
+    const translateY = this.height / 2 - graphCenterY * scale;
+
+    // Apply transform
+    const transform = d3.zoomIdentity
+      .translate(translateX, translateY)
+      .scale(scale);
+
+    // Get the zoom behavior from initSvg
+    const zoom = d3.zoom()
+      .scaleExtent([0.1, 4])
+      .on('zoom', (event) => {
+        this.g.attr('transform', event.transform);
+      });
+
+    this.svg.transition()
+      .duration(750)
+      .call(zoom.transform, transform);
+
+    console.log(`Fit to view: bounds=(${minX.toFixed(0)}, ${minY.toFixed(0)}) to (${maxX.toFixed(0)}, ${maxY.toFixed(0)}), scale=${scale.toFixed(2)}`);
   }
 
   initSvg() {
@@ -71,6 +228,9 @@ export default class NetworkGraph {
       .append("svg")
       .attr("width", this.width)
       .attr("height", this.height);
+
+    // Track current zoom level for performance optimizations
+    this.currentZoom = 1;
 
     // Add zoom behavior
     this.g = this.svg.append("g");
@@ -84,6 +244,13 @@ export default class NetworkGraph {
         .scaleExtent([0.1, 4])
         .on("zoom", (event) => {
           this.g.attr("transform", event.transform);
+          this.currentZoom = event.transform.k;
+
+          // PERFORMANCE: Hide labels when zoomed out for better performance
+          // Show labels when zoom >= 0.5x
+          if (this.labelGroup) {
+            this.labelGroup.style("display", this.currentZoom >= 0.5 ? "block" : "none");
+          }
         })
     );
 
@@ -95,48 +262,55 @@ export default class NetworkGraph {
 
   createBoundaryForce() {
     // Creates a stronger custom force to keep nodes within the visible area
+    // PERFORMANCE: Pre-calculate constants outside the per-tick function
+    const padding = 80;
+    const centerX = this.width / 2;
+    const centerY = this.height / 2;
+    const maxDistance = Math.min(this.width, this.height) * 0.4;
+
     return () => {
-      const padding = 80; // Larger padding from the edges
-      for (let node of this.data.nodes) {
+      // PERFORMANCE: Only iterate over nodes, avoid extra calculations
+      for (let i = 0, n = this.data.nodes.length; i < n; i++) {
+        const node = this.data.nodes[i];
+
+        // Skip fixed nodes early
+        if (node.fx && node.fy) continue;
+
         // Apply boundary force to all nodes, but stronger for those without fixed positions
         const strength = !node.fx && !node.fy ? 0.3 : 0.05;
-        
+
         // Calculate distance from center
-        const centerX = this.width / 2;
-        const centerY = this.height / 2;
         const dx = centerX - node.x;
         const dy = centerY - node.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        
+        const distSq = dx * dx + dy * dy; // Use squared distance to avoid sqrt
+
         // If node is too close to any edge or too far from center, apply force
-        const maxDistance = Math.min(this.width, this.height) * 0.4; // 40% of smaller dimension
-        
-        if (node.x < padding || 
-            node.x > this.width - padding || 
-            node.y < padding || 
+        const maxDistSq = maxDistance * maxDistance;
+
+        if (node.x < padding ||
+            node.x > this.width - padding ||
+            node.y < padding ||
             node.y > this.height - padding ||
-            distance > maxDistance) {
-          
+            distSq > maxDistSq) {
+
           // Calculate direction to center
-          const scale = 0.1 * strength; // Scale the force based on strength
+          const scale = 0.1 * strength;
           node.vx = (node.vx || 0) + dx * scale;
           node.vy = (node.vy || 0) + dy * scale;
-          
-          // Apply minimum bounds
+
+          // Apply minimum bounds with direct assignment (faster)
           if (node.x < padding) {
             node.x = padding;
-            node.vx = Math.abs(node.vx || 0) * 0.5; // Bounce back with reduced velocity
-          } 
-          if (node.x > this.width - padding) {
+            node.vx = Math.abs(node.vx || 0) * 0.5;
+          } else if (node.x > this.width - padding) {
             node.x = this.width - padding;
             node.vx = -Math.abs(node.vx || 0) * 0.5;
           }
-          
+
           if (node.y < padding) {
             node.y = padding;
             node.vy = Math.abs(node.vy || 0) * 0.5;
-          }
-          if (node.y > this.height - padding) {
+          } else if (node.y > this.height - padding) {
             node.y = this.height - padding;
             node.vy = -Math.abs(node.vy || 0) * 0.5;
           }
@@ -146,6 +320,9 @@ export default class NetworkGraph {
   }
 
   initSimulation() {
+    // PERFORMANCE: Track if update is scheduled to avoid redundant RAF calls
+    this.tickScheduled = false;
+
     this.simulation = d3
       .forceSimulation()
       .force(
@@ -160,23 +337,33 @@ export default class NetworkGraph {
       .force("center", d3.forceCenter(this.width / 2, this.height / 2).strength(0.3)) // Stronger center force
       .force("x", d3.forceX(this.width / 2).strength(0.1)) // Stronger x-centering
       .force("y", d3.forceY(this.height / 2).strength(0.1)) // Stronger y-centering
-      .force("collision", d3.forceCollide().radius(d => 20 + d.centrality * 50).strength(0.9)) // Stronger collision detection
+      .force("collision", d3.forceCollide().radius(d => 6 + d.centrality * 14).strength(0.9)) // Stronger collision detection
       .force("boundary", this.createBoundaryForce())
       .alphaDecay(0.01) // Very slow decay for more persistent movement
       .velocityDecay(0.3) // Less friction for more natural physics
-      .on("tick", () => this.updatePositions());
+      .on("tick", () => {
+        // PERFORMANCE: Throttle updates using requestAnimationFrame
+        // This ensures we only update once per frame, not multiple times
+        if (!this.tickScheduled) {
+          this.tickScheduled = true;
+          requestAnimationFrame(() => {
+            this.updatePositions();
+            this.tickScheduled = false;
+          });
+        }
+      });
   }
 
   /**
    * Use the adapter to enrich nodes with network metrics
    * This replaces the old manual centrality calculation
-   * @returns {Array} Nodes enriched with centrality and other metrics
+   * @returns {Promise<Array>} Nodes enriched with centrality and other metrics
    */
-  calculateCentrality() {
+  async calculateCentrality() {
     if (this.data.nodes.length === 0) return [];
 
     // Use the adapter to compute metrics using @guinetik/network-js
-    const enrichedData = this.adapter.setData(this.data.nodes, this.data.links);
+    const enrichedData = await this.adapter.setData(this.data.nodes, this.data.links);
 
     return enrichedData.nodes;
   }
@@ -210,10 +397,19 @@ export default class NetworkGraph {
     }).filter(link => link.source && link.target); // Filter out any links with missing nodes
   }
 
-  updateGraph() {
-    // Recalculate centrality
-    const nodesWithCentrality = this.calculateCentrality();
-    this.data.nodes = nodesWithCentrality;
+  async updateGraph(calculateMetrics = false) {
+    // Optionally recalculate centrality (skip on initial load, calculate on analysis)
+    if (calculateMetrics) {
+      const nodesWithCentrality = await this.calculateCentrality();
+      this.data.nodes = nodesWithCentrality;
+    } else {
+      // Just ensure nodes have default centrality for sizing
+      this.data.nodes = this.data.nodes.map(n => ({
+        ...n,
+        centrality: n.centrality || 0.5,  // Default moderate size
+        group: n.group || 1  // Default group
+      }));
+    }
 
     // Re-resolve references for links to point to actual node objects
     this.resolveLinkNodeRefs();
@@ -228,7 +424,9 @@ export default class NetworkGraph {
     const nodeEnter = this.node
       .enter()
       .append("circle")
-      .attr("r", d => 10 + d.centrality * 30)
+      .attr("r", d => 4 + d.centrality * 12)
+      .attr("cx", 0)  // Set origin at 0,0 since we're using transform
+      .attr("cy", 0)
       .call(this.drag())
       .on("mouseover", (event, d) => {
         this.showNodeInfo(d);
@@ -253,7 +451,12 @@ export default class NetworkGraph {
 
     // Merge existing and new nodes and update properties
     this.node = nodeEnter.merge(this.node)
-      .attr("r", d => 10 + d.centrality * 30);
+      .attr("r", d => 4 + d.centrality * 12);
+
+    // Invalidate cached selections when graph structure changes
+    this.cachedNode = null;
+    this.cachedLink = null;
+    this.cachedLabel = null;
 
     // Now handle links after nodes are properly set up
     this.link = this.linkGroup
@@ -299,6 +502,70 @@ export default class NetworkGraph {
 
     this.label = labelEnter.merge(this.label);
 
+    // Decide whether to use worker or main thread simulation
+    if (this.shouldUseWorker()) {
+      console.log(`Using Web Worker for layout (${this.data.links.length} edges)`);
+
+      // Stop main thread simulation
+      if (this.simulation) {
+        this.simulation.stop();
+      }
+
+      // Determine if we should use fluid mode
+      this.isFluidMode = this.data.links.length > this.fluidThreshold;
+
+      // Initialize worker
+      if (this.initWorker()) {
+        // Send data to worker
+        this.worker.postMessage({
+          type: 'init',
+          data: {
+            nodes: this.data.nodes.map(n => ({
+              id: n.id,
+              x: n.x,
+              y: n.y,
+              fx: n.fx,
+              fy: n.fy,
+              centrality: n.centrality || 0
+            })),
+            links: this.data.links.map(l => ({
+              source: typeof l.source === 'object' ? l.source.id : l.source,
+              target: typeof l.target === 'object' ? l.target.id : l.target,
+              weight: l.weight || 1
+            })),
+            width: this.width,
+            height: this.height,
+            options: {
+              linkDistance: 100,
+              chargeStrength: -500,
+              centerStrength: 0.3,
+              collisionRadius: 20,
+              fluidMode: this.isFluidMode
+            }
+          }
+        });
+
+        console.log(this.isFluidMode ?
+          `Fluid mode enabled: network will expand naturally, then zoom to fit` :
+          `Constrained mode: network will fit within viewport`
+        );
+
+        // Initially place nodes at their positions to prevent jumps
+        this.updatePositions();
+
+        // For fluid mode, fit to view once simulation stabilizes
+        if (this.isFluidMode) {
+          this.pendingFitToView = true;
+        }
+
+        return;
+      }
+    }
+
+    // Fallback to main thread simulation (for smaller networks or if worker fails)
+    console.log(`Using main thread for layout (${this.data.links.length} edges)`);
+    this.isUsingWorker = false;
+
     // Update the simulation with the new nodes and links
     this.simulation.nodes(this.data.nodes);
 
@@ -316,64 +583,83 @@ export default class NetworkGraph {
     if (collisionForce) {
       collisionForce.initialize(this.data.nodes);
     }
-    
+
     // Initially place nodes at their positions to prevent jumps
     this.updatePositions();
-    
+
     // Ensure nodes are centered in the viewport when the graph is first created
     // Only centralize if this is the initial load or we have just a few nodes
     if (this.data.nodes.length <= 3) {
       this.centralizeNodes();
     }
-    
+
     // Warm up the simulation with higher energy
     this.simulation.alpha(0.8).restart();
   }
 
   updatePositions() {
-    // Apply boundary constraints to ensure nodes stay within viewport
-    const padding = 50;
-    this.data.nodes.forEach(node => {
-      if (!node.fx) {
-        node.x = Math.max(padding, Math.min(this.width - padding, node.x));
-      }
-      if (!node.fy) {
-        node.y = Math.max(padding, Math.min(this.height - padding, node.y));
-      }
-    });
-    
+    // Apply boundary constraints only in non-fluid mode
+    if (!this.isFluidMode) {
+      const padding = 50;
+      this.data.nodes.forEach(node => {
+        if (!node.fx) {
+          node.x = Math.max(padding, Math.min(this.width - padding, node.x));
+        }
+        if (!node.fy) {
+          node.y = Math.max(padding, Math.min(this.height - padding, node.y));
+        }
+      });
+    }
+
+    // PERFORMANCE: Cache selections to avoid repeated DOM queries
+    // Use cached selections if available, otherwise select and cache
+    if (!this.cachedLink || this.cachedLink.size() !== this.data.links.length) {
+      this.cachedLink = this.linkGroup.selectAll("line");
+    }
+    if (!this.cachedNode || this.cachedNode.size() !== this.data.nodes.length) {
+      this.cachedNode = this.nodeGroup.selectAll("circle");
+    }
+    if (!this.cachedLabel || this.cachedLabel.size() !== this.data.nodes.length) {
+      this.cachedLabel = this.labelGroup.selectAll("text");
+    }
+
+    // PERFORMANCE: Use transform for nodes instead of cx/cy (faster GPU acceleration)
+    this.cachedNode.attr("transform", d => `translate(${d.x},${d.y})`);
+
     // Update link positions - safely handle potentially broken references
-    this.linkGroup
-      .selectAll("line")
+    this.cachedLink
       .attr("x1", d => (d.source && d.source.x) || 0)
       .attr("y1", d => (d.source && d.source.y) || 0)
       .attr("x2", d => (d.target && d.target.x) || 0)
       .attr("y2", d => (d.target && d.target.y) || 0);
 
-    // Update node positions
-    this.nodeGroup
-      .selectAll("circle")
-      .attr("cx", d => d.x)
-      .attr("cy", d => d.y);
-
-    // Update label positions
-    this.labelGroup
-      .selectAll("text")
-      .attr("x", d => d.x)
-      .attr("y", d => d.y);
+    // PERFORMANCE: Only update labels if they're visible (zoom >= 0.5x)
+    if (this.currentZoom >= 0.5) {
+      this.cachedLabel
+        .attr("x", d => d.x)
+        .attr("y", d => d.y);
+    }
   }
 
   drag() {
     return d3
       .drag()
       .on("start", (event, d) => {
-        // When drag starts, add energy to the simulation
-        this.simulation.alphaTarget(0.5).restart();
-        
         // Store the initial position for reference
         d.fx = d.x;
         d.fy = d.y;
-        
+
+        // Handle worker vs main thread
+        if (this.isUsingWorker && this.worker) {
+          this.worker.postMessage({
+            type: 'updateNode',
+            data: { nodeId: d.id, x: d.x, y: d.y, fx: d.fx, fy: d.fy }
+          });
+        } else if (this.simulation) {
+          // When drag starts, add energy to the simulation
+          this.simulation.alphaTarget(0.5).restart();
+        }
+
         // Highlight this node and its direct connections
         this.highlightConnections(d);
       })
@@ -381,10 +667,23 @@ export default class NetworkGraph {
         // Update position during drag
         d.fx = event.x;
         d.fy = event.y;
-        
-        // Add more energy during drag to keep simulation active
-        this.simulation.alpha(0.5);
-        
+
+        // Handle worker vs main thread
+        if (this.isUsingWorker && this.worker) {
+          this.worker.postMessage({
+            type: 'updateNode',
+            data: { nodeId: d.id, x: event.x, y: event.y, fx: event.x, fy: event.y }
+          });
+        } else if (this.simulation) {
+          // Add more energy during drag to keep simulation active
+          this.simulation.alpha(0.5);
+        }
+
+        // Manually update position for immediate feedback
+        d.x = event.x;
+        d.y = event.y;
+        this.updatePositions();
+
         // Update the highlighting as node moves
         this.highlightConnections(d);
       })
@@ -392,13 +691,18 @@ export default class NetworkGraph {
         // Optional: uncomment to release node after dragging
         // d.fx = null;
         // d.fy = null;
-        
-        // Gradually cool down the simulation
-        this.simulation.alphaTarget(0.5);
-        setTimeout(() => {
-          this.simulation.alphaTarget(0);
-        }, 1000);
-        
+
+        // Handle worker vs main thread
+        if (this.isUsingWorker && this.worker) {
+          // Keep node fixed after drag in worker mode
+        } else if (this.simulation) {
+          // Gradually cool down the simulation
+          this.simulation.alphaTarget(0.5);
+          setTimeout(() => {
+            this.simulation.alphaTarget(0);
+          }, 1000);
+        }
+
         // Remove any highlighting
         this.removeHighlights();
       });

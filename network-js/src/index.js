@@ -1,25 +1,48 @@
+/**
+ * NetworkStats - Worker-First Network Analysis Library
+ *
+ * **NEW ARCHITECTURE:**
+ * - All computation happens in workers
+ * - All methods are async
+ * - Simple, clean API
+ *
+ * @module index
+ */
+
 import { createLogger } from "@guinetik/logger";
 import Graph from "./graph.js";
-import { Louvain } from "./louvain.js";
-import { Network } from "./network.js";
+import { WorkerManager } from "./compute/index.js";
+import {
+  NetworkStatistics,
+  DegreeStatistic,
+  BetweennessStatistic,
+  ClusteringStatistic,
+  EigenvectorStatistic,
+  CliquesStatistic,
+  ClosenessStatistic,
+  EgoDensityStatistic
+} from "./statistics/index.js";
+import {
+  DensityStatistic,
+  DiameterStatistic,
+  AverageClusteringStatistic,
+  AverageShortestPathStatistic,
+  ConnectedComponentsStatistic,
+  AverageDegreeStatistic
+} from "./statistics/algorithms/graph-stats.js";
+import { CommunityDetection, LouvainAlgorithm } from "./community/index.js";
 
 /**
- * Main class for analyzing network graphs and calculating statistical metrics.
- * Provides a high-level API for computing various centrality measures and network properties.
+ * Main class for analyzing network graphs.
  *
- * **Supported Features**:
- * - Degree centrality
- * - Eigenvector centrality
- * - Betweenness centrality
- * - Clustering coefficient
- * - Clique detection
- * - Community detection (modularity via Louvain)
- *
- * **Environment**: Works in both Node.js and browser environments
+ * **Worker-First Design:**
+ * - All analysis is async (uses web workers)
+ * - Optimal performance regardless of graph size
+ * - Clean, simple API
  *
  * @class
  * @example
- * import NetworkStats from '@guinetik.network-js';
+ * import NetworkStats from '@guinetik/network-js';
  *
  * const analyzer = new NetworkStats({ verbose: true });
  * const network = [
@@ -28,7 +51,7 @@ import { Network } from "./network.js";
  *   { source: 'C', target: 'A', weight: 1 }
  * ];
  *
- * const results = analyzer.analyze(network, ['degree', 'eigenvector']);
+ * const results = await analyzer.analyze(network, ['degree', 'eigenvector']);
  * console.log(results);
  * // [
  * //   { id: 'A', degree: 2, eigenvector: 0.577 },
@@ -42,258 +65,322 @@ export class NetworkStats {
    *
    * @static
    * @type {Object}
-   * @property {string} EIGENVECTOR - Eigenvector centrality (importance based on neighbors)
-   * @property {string} MODULARITY - Community detection using Louvain algorithm
-   * @property {string} BETWEENNESS - Betweenness centrality (bridge importance)
-   * @property {string} CLUSTERING - Local clustering coefficient (group cohesion)
-   * @property {string} TRANSITIVITY - Network transitivity (deprecated, use CLUSTERING)
-   * @property {string} CLIQUES - Number of maximal cliques per node
-   * @property {string} DEGREE - Degree centrality (connection count)
-   * @property {string[]} ALL - All available features
    */
   static FEATURES = {
     EIGENVECTOR: "eigenvector",
     MODULARITY: "modularity",
     BETWEENNESS: "betweenness",
     CLUSTERING: "clustering",
-    TRANSITIVITY: "transitivity",
     CLIQUES: "cliques",
     DEGREE: "degree",
+    CLOSENESS: "closeness",
+    EGO_DENSITY: "ego-density",
     ALL: [
       "degree",
-      "modularity",
-      "cliques",
-      "eigenvector",
       "betweenness",
       "clustering",
+      "eigenvector",
+      "cliques",
+      "closeness",
+      "ego-density"
     ],
+  };
+
+  /**
+   * Available graph-level statistics
+   *
+   * @static
+   * @type {Object}
+   */
+  static GRAPH_STATS = {
+    DENSITY: "density",
+    DIAMETER: "diameter",
+    AVERAGE_CLUSTERING: "average_clustering",
+    AVERAGE_SHORTEST_PATH: "average_shortest_path",
+    CONNECTED_COMPONENTS: "connected_components",
+    AVERAGE_DEGREE: "average_degree",
+    ALL: [
+      "density",
+      "diameter",
+      "average_clustering",
+      "average_shortest_path",
+      "connected_components",
+      "average_degree"
+    ]
+  };
+
+  /**
+   * Available community detection algorithms.
+   *
+   * @static
+   * @type {Object}
+   */
+  static COMMUNITY_DETECTION = {
+    LOUVAIN: "louvain",
+    ALL: ["louvain"],
   };
 
   /**
    * Create a new NetworkStats analyzer instance.
    *
    * @param {Object} [options={}] - Configuration options
-   * @param {number} [options.maxIter=100000] - Maximum iterations for iterative algorithms
    * @param {boolean} [options.verbose=true] - Enable detailed logging
-   * @param {Object} [options.louvainModule] - Custom Louvain module (for testing)
+   * @param {number} [options.maxWorkers] - Maximum number of workers (default: auto-detect)
+   * @param {number} [options.taskTimeout=60000] - Task timeout in milliseconds
+   * @param {string} [options.workerScript] - Path to worker script (for bundlers like Vite)
    * @example
    * const analyzer = new NetworkStats({
    *   verbose: false,
-   *   maxIter: 50000
+   *   maxWorkers: 4
    * });
    */
   constructor(options = {}) {
     this.options = {
-      maxIter: options.maxIter || 100000,
       verbose: options.verbose !== undefined ? options.verbose : true,
-      louvainModule: options.louvainModule || { Louvain }
+      maxWorkers: options.maxWorkers,
+      taskTimeout: options.taskTimeout || 60000,
+      workerScript: options.workerScript
     };
 
-    // Initialize logger with appropriate level
+    // Initialize logger
     this.log = createLogger({
       prefix: 'NetworkStats',
       level: this.options.verbose ? 'debug' : 'info'
     });
 
-    // Define feature processors as a map of functions
-    this.featureProcessors = {
-      [NetworkStats.FEATURES.EIGENVECTOR]: this.#processEigenvector.bind(this),
-      [NetworkStats.FEATURES.BETWEENNESS]: this.#processBetweenness.bind(this),
-      [NetworkStats.FEATURES.CLUSTERING]: this.#processClustering.bind(this),
-      [NetworkStats.FEATURES.CLIQUES]: this.#processCliques.bind(this),
-      [NetworkStats.FEATURES.DEGREE]: this.#processDegree.bind(this),
-      [NetworkStats.FEATURES.MODULARITY]: this.#processModularity.bind(this)
+    // Initialize WorkerManager (singleton - happens once)
+    WorkerManager.initialize({
+      maxWorkers: this.options.maxWorkers,
+      taskTimeout: this.options.taskTimeout,
+      verbose: this.options.verbose,
+      workerScript: this.options.workerScript
+    }).catch(err => {
+      this.log.error('Failed to initialize workers:', err);
+    });
+
+    // Map feature names to statistic classes
+    this.statisticClasses = {
+      [NetworkStats.FEATURES.DEGREE]: DegreeStatistic,
+      [NetworkStats.FEATURES.BETWEENNESS]: BetweennessStatistic,
+      [NetworkStats.FEATURES.CLUSTERING]: ClusteringStatistic,
+      [NetworkStats.FEATURES.EIGENVECTOR]: EigenvectorStatistic,
+      [NetworkStats.FEATURES.CLIQUES]: CliquesStatistic,
+      [NetworkStats.FEATURES.CLOSENESS]: ClosenessStatistic,
+      [NetworkStats.FEATURES.EGO_DENSITY]: EgoDensityStatistic,
+      [NetworkStats.FEATURES.MODULARITY]: 'modularity' // Special case
+    };
+
+    // Map graph stat names to classes
+    this.graphStatClasses = {
+      [NetworkStats.GRAPH_STATS.DENSITY]: DensityStatistic,
+      [NetworkStats.GRAPH_STATS.DIAMETER]: DiameterStatistic,
+      [NetworkStats.GRAPH_STATS.AVERAGE_CLUSTERING]: AverageClusteringStatistic,
+      [NetworkStats.GRAPH_STATS.AVERAGE_SHORTEST_PATH]: AverageShortestPathStatistic,
+      [NetworkStats.GRAPH_STATS.CONNECTED_COMPONENTS]: ConnectedComponentsStatistic,
+      [NetworkStats.GRAPH_STATS.AVERAGE_DEGREE]: AverageDegreeStatistic
     };
   }
 
   /**
    * Analyze a network and compute the requested statistical features.
-   * This is the main entry point for network analysis.
    *
-   * **Performance**: Times the analysis and logs progress (if verbose mode enabled).
+   * **ASYNC**: All analysis happens in web workers
    *
    * @param {Array<Object>} network - Array of edge objects representing the network
    * @param {string|number} network[].source - Source node identifier
    * @param {string|number} network[].target - Target node identifier
    * @param {number} [network[].weight=1] - Edge weight (optional, defaults to 1)
    * @param {string[]|string} [features] - Features to compute (defaults to ALL features)
-   * @returns {Array<Object>} Array of node statistics, one object per node
+   * @param {Object} [options={}] - Analysis options
+   * @param {Function} [options.onProgress] - Progress callback (0-1)
+   * @param {boolean} [options.includeGraphStats=false] - Include graph-level statistics
+   * @param {string[]} [options.graphStats] - Specific graph stats to calculate
+   * @returns {Promise<Object|Array>} Node stats array or { nodes: [...], graph: {...} }
    * @example
-   * // Analyze a simple triangle network
-   * const network = [
-   *   { source: 'A', target: 'B' },
-   *   { source: 'B', target: 'C' },
-   *   { source: 'C', target: 'A' }
-   * ];
+   * // Basic usage
+   * const results = await analyzer.analyze(network, ['degree', 'betweenness']);
    *
-   * // Compute specific features
-   * const results = analyzer.analyze(network, ['degree', 'clustering']);
-   *
-   * // Results format:
-   * // [
-   * //   { id: 'A', degree: 2, clustering: 1.0 },
-   * //   { id: 'B', degree: 2, clustering: 1.0 },
-   * //   { id: 'C', degree: 2, clustering: 1.0 }
-   * // ]
    * @example
-   * // Compute all features (default)
-   * const allResults = analyzer.analyze(network);
+   * // With progress tracking
+   * const results = await analyzer.analyze(network, ['betweenness'], {
+   *   onProgress: (progress) => console.log(`${Math.round(progress * 100)}%`)
+   * });
+   *
+   * @example
+   * // Include graph-level stats
+   * const results = await analyzer.analyze(network, ['degree'], {
+   *   includeGraphStats: true,
+   *   graphStats: ['density', 'diameter']
+   * });
+   * // Returns: { nodes: [{id, degree}], graph: {density, diameter} }
    */
-  analyze(network, features) {
+  async analyze(network, features, options = {}) {
     this.log.time("networkAnalysis");
-
-    this.log.info(`Processing ${network.length} records`);
+    this.log.info(`Analyzing network with ${network.length} edges`);
 
     // Use default features if none provided
     features = features || NetworkStats.FEATURES.ALL;
+    if (typeof features === 'string') {
+      features = [features];
+    }
 
-    // Extract network data
+    // Build graph
     const { graph, nodes } = this.#prepareNetwork(network);
+    this.log.info(`Graph: ${nodes.length} nodes, ${graph.edges.length} edges`);
 
-    // Process each requested feature
-    const stats = this.#processFeatures(graph, features, nodes);
+    // Calculate node-level statistics
+    const nodeStats = await this.#calculateNodeStats(graph, nodes, features, options);
 
-    // Normalize and return results
-    const result = this.#normalizeFeatures(stats, nodes);
+    // Calculate graph-level statistics if requested
+    if (options.includeGraphStats) {
+      const graphStats = await this.#calculateGraphStats(graph, options.graphStats, options);
+      this.log.timeEnd("networkAnalysis");
+      return { nodes: nodeStats, graph: graphStats };
+    }
 
     this.log.timeEnd("networkAnalysis");
-    return result;
+    return nodeStats;
   }
 
-  #prepareNetwork(network) {
-    // Get unique nodes from network
-    const nodesFromSource = this.#getDistinctNodes(network, "source");
-    const nodesFromTarget = this.#getDistinctNodes(network, "target");
-    const nodes = [...new Set([...nodesFromSource, ...nodesFromTarget])];
-    
-    // Create and populate the graph
-    const graph = new Graph();
-    graph.addNodesFrom(nodes);
-    
-    // Add edges to graph
-    network.forEach(({ source, target, weight = 1 }) => {
-      graph.addEdge(source, target, weight);
-    });
-    
-    return { graph, nodes };
-  }
-
-  #processFeatures(graph, features, nodes) {
+  /**
+   * Calculate node-level statistics
+   * @private
+   */
+  async #calculateNodeStats(graph, nodes, features, options) {
     const stats = {};
 
-    // Process each requested feature
+    // Calculate each feature
     for (const feature of features) {
-      if (this.featureProcessors[feature]) {
-        try {
-          this.log.debug(`Processing ${feature.toUpperCase()}`);
+      if (feature === NetworkStats.FEATURES.MODULARITY) {
+        // Special case: community detection
+        stats[feature] = await this.#calculateModularity(graph, options);
+      } else if (this.statisticClasses[feature]) {
+        // Use statistic class (delegates to worker)
+        const StatClass = this.statisticClasses[feature];
+        const statInstance = new StatClass();
 
-          stats[feature] = this.featureProcessors[feature](graph, nodes);
-        } catch (err) {
-          this.log.error(`Error processing ${feature}:`, err);
-        }
+        this.log.debug(`Calculating ${feature}...`);
+        const result = await statInstance.calculate(graph, null, {
+          onProgress: options.onProgress
+        });
+
+        stats[feature] = result;
+      } else {
+        this.log.warn(`Unknown feature: ${feature}`);
       }
     }
 
-    return stats;
+    // Normalize into array of node objects
+    return this.#normalizeNodeStats(stats, nodes);
   }
 
-  #processEigenvector(graph) {
-    return Network.eigenvectorCentrality(graph, {
-      maxIter: this.options.maxIter,
-    })._stringValues;
-  }
+  /**
+   * Calculate graph-level statistics
+   * @private
+   */
+  async #calculateGraphStats(graph, requestedStats, options = {}) {
+    const statsToCalculate = requestedStats || NetworkStats.GRAPH_STATS.ALL;
+    const results = {};
 
-  #processBetweenness(graph) {
-    return Network.betweennessCentrality(graph)._stringValues;
-  }
-
-  #processClustering(graph) {
-    return Network.clustering(graph)._stringValues;
-  }
-
-  #processCliques(graph) {
-    return Network.numberOfCliques(graph)._stringValues;
-  }
-
-  #processDegree(graph) {
-    return Network.degree(graph)._stringValues;
-  }
-
-  #processModularity(graph, nodes) {
-    return Network.modularity(graph, {
-      louvainModule: this.options.louvainModule
-    });
-  }
-
-  #normalizeFeatures(stats, nodes) {
-    return nodes.map(node => {
-      const nodeStats = { id: node };
-      
-      for (const [feature, values] of Object.entries(stats)) {
-        nodeStats[feature] = values[node];
+    for (const statName of statsToCalculate) {
+      const StatClass = this.graphStatClasses[statName];
+      if (StatClass) {
+        this.log.debug(`Calculating graph stat: ${statName}...`);
+        const statInstance = new StatClass();
+        results[statName] = await statInstance.calculate(graph, null, {
+          onProgress: options.onProgress
+        });
+      } else {
+        this.log.warn(`Unknown graph stat: ${statName}`);
       }
-      
-      return nodeStats;
+    }
+
+    return results;
+  }
+
+  /**
+   * Calculate modularity (community detection)
+   * @private
+   */
+  async #calculateModularity(graph, options = {}) {
+    const detector = new CommunityDetection(graph);
+    const algorithm = new LouvainAlgorithm();
+
+    this.log.debug('Running Louvain community detection...');
+    const result = await detector.detectCommunities(algorithm, {
+      onProgress: options.onProgress
     });
+
+    // Return communities as node -> community mapping
+    return result.communities;
   }
 
-  #getDistinctNodes(network, prop) {
-    return [...new Set(network.map(item => item[prop]))];
+  /**
+   * Build graph from network edge list
+   * @private
+   */
+  #prepareNetwork(network) {
+    // Get unique nodes
+    const nodesSet = new Set();
+    for (const edge of network) {
+      nodesSet.add(edge.source);
+      nodesSet.add(edge.target);
+    }
+    const nodes = Array.from(nodesSet);
+
+    // Build graph
+    const graph = new Graph();
+    for (const node of nodes) {
+      graph.addNode(node);
+    }
+    for (const edge of network) {
+      const weight = edge.weight !== undefined ? edge.weight : 1;
+      graph.addEdge(edge.source, edge.target, weight);
+    }
+
+    return { graph, nodes };
+  }
+
+  /**
+   * Normalize statistics into array of node objects
+   * @private
+   */
+  #normalizeNodeStats(stats, nodes) {
+    const results = [];
+
+    for (const nodeId of nodes) {
+      const nodeStats = { id: nodeId };
+
+      // Add each statistic to this node
+      for (const [feature, values] of Object.entries(stats)) {
+        if (typeof values === 'object' && values !== null) {
+          nodeStats[feature] = values[nodeId];
+        }
+      }
+
+      results.push(nodeStats);
+    }
+
+    return results;
+  }
+
+  /**
+   * Cleanup resources (terminates worker pool)
+   *
+   * @returns {Promise<void>}
+   * @example
+   * await analyzer.dispose();
+   */
+  async dispose() {
+    await WorkerManager.terminate();
   }
 }
 
-/**
- * Functional wrapper for backward compatibility with legacy API.
- * Creates a NetworkStats instance and analyzes the network in one call.
- *
- * **Note**: For new code, prefer using the class-based API:
- * ```javascript
- * const analyzer = new NetworkStats(options);
- * const results = analyzer.analyze(network, features);
- * ```
- *
- * @param {Array<Object>} network - Array of edge objects
- * @param {string[]|null} [features=null] - Features to compute (null = all features)
- * @param {Object} [options={}] - Configuration options
- * @returns {Array<Object>} Array of node statistics
- * @example
- * // Legacy functional API
- * import getNetworkStats from '@guinetik/network-js';
- *
- * const stats = getNetworkStats(
- *   [{ source: 'A', target: 'B' }],
- *   ['degree', 'clustering'],
- *   { verbose: false }
- * );
- */
-function getNetworkStats(network, features = null, options = {}) {
-  const analyzer = new NetworkStats(options);
-  return analyzer.analyze(network, features);
-}
-
-// Export core classes
-export { default as Graph } from './graph.js';
-export { Network } from './network.js';
-export { Louvain } from './louvain.js';
-
-// Export layout classes
-export { Layout, ForceDirectedLayout, CircularLayout } from './layouts/index.js';
-
-// Export adapters
-export {
-  Adapter,
-  CSVAdapter,
-  JSONAdapter,
-  NetworkXAdapter
-} from './adapters/index.js';
-
-// Export community detection
-export {
-  CommunityDetection,
-  CommunityAlgorithm,
-  LouvainAlgorithm
-} from './community/index.js';
-
-// Export functional wrapper (NetworkStats already exported above as class)
-export { getNetworkStats };
-export default getNetworkStats;
+// Export everything
+export default NetworkStats;
+export { Graph };
+export { WorkerManager };
+export * from "./statistics/index.js";
+export * from "./community/index.js";
+export * from "./layouts/index.js";
+export * from "./adapters/index.js";

@@ -18,30 +18,16 @@
             width: 100%;
             height: 100%;
             overflow: hidden;
-        }
-
-        #particles {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 0;
-            pointer-events: none;
-        }
-
-        .content-wrapper {
-            position: relative;
-            z-index: 1;
+            background: transparent;
         }
 
         #graph-container {
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.7) 0%, rgba(249, 250, 251, 0.7) 100%);
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.5) 0%, rgba(249, 250, 251, 0.5) 100%);
             position: relative;
         }
 
         .dark #graph-container {
-            background: linear-gradient(135deg, rgba(26, 26, 46, 0.9) 0%, rgba(22, 33, 62, 0.9) 100%);
+            background: linear-gradient(135deg, rgba(26, 26, 46, 0.7) 0%, rgba(22, 33, 62, 0.7) 100%);
         }
 
         #graph-container svg {
@@ -49,9 +35,7 @@
         }
     </style>
 </head>
-<body class="bg-gray-50 dark:bg-gray-900">
-    <!-- Network Particle Background -->
-    <canvas id="particles"></canvas>
+<body class="dark:bg-transparent">
     <!-- Back Button -->
     <a
         href="../index.html"
@@ -60,7 +44,6 @@
         ← Back to Home
     </a>
 
-    <div class="content-wrapper">
     <!-- Split Layout -->
     <div class="flex flex-col lg:flex-row h-screen" x-data="networkGraphApp()">
         <!-- Left Panel: Info & Controls -->
@@ -291,7 +274,6 @@
         import * as d3 from 'd3';
         import Alpine from 'alpinejs';
         import NetworkGraph from '../src/networkgraph.d3.js';
-        import { initParticles } from '../js/particles.js';
         import { createNetworkGraphApp } from '../js/network-graph.js';
 
         // Make D3 available globally for NetworkGraph
@@ -372,9 +354,6 @@
 
         // Start Alpine
         Alpine.start();
-
-        // Initialize particle background
-        initParticles();
     </script>
     </div>
 </body>

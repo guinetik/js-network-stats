@@ -11,8 +11,19 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: './index.html',
-        family: './family.html'
+        family: './family.html',
+        'network-graph': './examples/network-graph.html',
+        'family-tree': './examples/family-tree.html',
+        'brazilian-networks': './examples/brazilian-networks.html'
       }
     }
+  },
+  // Worker support
+  worker: {
+    format: 'es',
+    plugins: []
+  },
+  optimizeDeps: {
+    exclude: ['@guinetik/network-js']
   }
 });

@@ -9,24 +9,25 @@ import { CommunityAlgorithm, LouvainAlgorithm } from './algorithms/index.js';
  * than to the rest of the network.
  *
  * **Design Pattern**: Strategy pattern - accepts any CommunityAlgorithm implementation
+ * **NEW**: Worker-first architecture - all detection is async and runs in web workers
  *
  * @class
  *
  * @example
  * import { CommunityDetection, LouvainAlgorithm } from '@guinetik/network-js';
  *
- * // Using algorithm instance (recommended)
+ * // Using algorithm instance (recommended) - NOW ASYNC!
  * const detector = new CommunityDetection(graph);
  * const louvain = new LouvainAlgorithm();
- * const result = detector.detectCommunities(louvain);
+ * const result = await detector.detectCommunities(louvain);
  *
  * console.log(result.communities); // { 'A': 0, 'B': 0, 'C': 1 }
  * console.log(result.modularity); // 0.42
  * console.log(result.numCommunities); // 2
  *
  * @example
- * // Using string name (backward compatibility)
- * const result2 = detector.detectCommunities('louvain');
+ * // Using string name (backward compatibility) - NOW ASYNC!
+ * const result2 = await detector.detectCommunities('louvain');
  */
 export class CommunityDetection {
   /**
@@ -55,29 +56,31 @@ export class CommunityDetection {
    * **Strategy Pattern**: Accepts either:
    * - A CommunityAlgorithm instance (recommended)
    * - A string name for backward compatibility ('louvain', etc.)
+   * **NEW**: Now async - all computation happens in web workers
    *
    * @param {CommunityAlgorithm|string} [algorithm='louvain'] - Algorithm instance or name
    * @param {Object} [options={}] - Algorithm-specific options (only used with string names)
-   * @returns {import('../models/types.js').CommunityResult} Community detection result
+   * @param {Function} [options.onProgress] - Progress callback (0-1)
+   * @returns {Promise<import('../models/types.js').CommunityResult>} Community detection result
    *
    * @example
-   * // Recommended: Pass algorithm instance
+   * // Recommended: Pass algorithm instance (NOW ASYNC!)
    * const louvain = new LouvainAlgorithm({ resolution: 1.0 });
-   * const result = detector.detectCommunities(louvain);
+   * const result = await detector.detectCommunities(louvain);
    *
    * @example
-   * // Backward compatibility: Pass string name
-   * const result = detector.detectCommunities('louvain', { resolution: 1.0 });
+   * // Backward compatibility: Pass string name (NOW ASYNC!)
+   * const result = await detector.detectCommunities('louvain', { resolution: 1.0 });
    *
    * @example
-   * // Use custom algorithm
+   * // Use custom algorithm (NOW ASYNC!)
    * class MyAlgorithm extends CommunityAlgorithm {
    *   constructor() { super('my-algo', 'My Algorithm'); }
-   *   detect(graph) { /* implementation *\/ }
+   *   async detect(graph) { /* implementation *\/ }
    * }
-   * const result = detector.detectCommunities(new MyAlgorithm());
+   * const result = await detector.detectCommunities(new MyAlgorithm());
    */
-  detectCommunities(algorithm = 'louvain', options = {}) {
+  async detectCommunities(algorithm = 'louvain', options = {}) {
     if (!this.graph) {
       throw new Error('No graph set. Use setGraph() or provide graph in constructor.');
     }
@@ -97,8 +100,10 @@ export class CommunityDetection {
       );
     }
 
-    // Execute the algorithm's detect method
-    return algorithmInstance.detect(this.graph);
+    // Execute the algorithm's detect method (now async)
+    return await algorithmInstance.detect(this.graph, {
+      onProgress: options.onProgress
+    });
   }
 
   /**
@@ -222,25 +227,27 @@ export class CommunityDetection {
    * Detect communities directly from GraphData
    *
    * Convenience method that handles Graph creation internally
+   * **NEW**: Now async - all computation happens in web workers
    *
    * @param {import('../models/types.js').GraphData} graphData - Standard graph data
    * @param {CommunityAlgorithm|string} [algorithm='louvain'] - Algorithm instance or name
    * @param {Object} [options={}] - Algorithm options (only used with string names)
-   * @returns {import('../models/types.js').CommunityResult} Community detection result
+   * @param {Function} [options.onProgress] - Progress callback (0-1)
+   * @returns {Promise<import('../models/types.js').CommunityResult>} Community detection result
    *
    * @example
-   * // Using algorithm instance
+   * // Using algorithm instance (NOW ASYNC!)
    * const louvain = new LouvainAlgorithm();
-   * const result = CommunityDetection.detect(graphData, louvain);
+   * const result = await CommunityDetection.detect(graphData, louvain);
    *
    * @example
-   * // Using string name (backward compatibility)
-   * const result = CommunityDetection.detect(graphData, 'louvain');
+   * // Using string name (backward compatibility) - NOW ASYNC!
+   * const result = await CommunityDetection.detect(graphData, 'louvain');
    */
-  static detect(graphData, algorithm = 'louvain', options = {}) {
+  static async detect(graphData, algorithm = 'louvain', options = {}) {
     const graph = this.graphFromData(graphData);
     const detector = new CommunityDetection(graph);
-    return detector.detectCommunities(algorithm, options);
+    return await detector.detectCommunities(algorithm, options);
   }
 }
 

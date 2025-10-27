@@ -1,5 +1,3 @@
-import { Connection } from "./connection.js";
-
 /**
  * Represents an undirected, weighted graph data structure.
  * Uses an adjacency map for O(1) neighbor lookups.
@@ -24,8 +22,9 @@ export class Graph {
     this.nodes = new Set();
 
     /**
-     * Array of all edges (Connection objects) in the graph
-     * @type {Connection[]}
+     * Array of all edges in the graph
+     * Each edge is an object with properties: {u: source, v: target, weight: number}
+     * @type {Array<{u: string|number, v: string|number, weight: number}>}
      */
     this.edges = [];
 
@@ -85,7 +84,7 @@ export class Graph {
     this.nodes.delete(node);
 
     // Remove all edges connected to this node
-    this.edges = this.edges.filter(edge => !edge.hasNode(node));
+    this.edges = this.edges.filter(edge => edge.u !== node && edge.v !== node);
 
     // Remove from adjacency map
     if (this.adjacencyMap.has(node)) {
@@ -152,9 +151,9 @@ export class Graph {
     this.nodes.add(source);
     this.nodes.add(target);
 
-    // Create a Connection object
-    const connection = new Connection(source, target, weight);
-    this.edges.push(connection);
+    // Create edge object (simple plain object, no need for Connection class)
+    const edge = { u: source, v: target, weight };
+    this.edges.push(edge);
 
     // Update adjacency map for quick lookups
     if (!this.adjacencyMap.has(source)) {
@@ -190,10 +189,10 @@ export class Graph {
   /**
    * Get all edges in the graph.
    *
-   * @returns {Connection[]} Array of Connection objects
+   * @returns {Array<{u: string|number, v: string|number, weight: number}>} Array of edge objects
    * @example
    * const edges = graph.getAllEdges();
-   * edges.forEach(edge => console.log(edge.source, '->', edge.target));
+   * edges.forEach(edge => console.log(edge.u, '->', edge.v, 'weight:', edge.weight));
    */
   getAllEdges() {
     return this.edges;
@@ -251,9 +250,9 @@ export class Graph {
    * graph.removeEdge('A', 'B');
    */
   removeEdge(source, target) {
-    // Find the edge index
+    // Find the edge index (check both directions since graph is undirected)
     const edgeIndex = this.edges.findIndex(edge =>
-      edge.hasNode(source) && edge.hasNode(target)
+      (edge.u === source && edge.v === target) || (edge.u === target && edge.v === source)
     );
 
     if (edgeIndex === -1) {
@@ -329,8 +328,10 @@ export class Graph {
     this.adjacencyMap.get(source).set(target, weight);
     this.adjacencyMap.get(target).set(source, weight);
 
-    // Update edges array
-    const edge = this.edges.find(e => e.hasNode(source) && e.hasNode(target));
+    // Update edges array (check both directions since graph is undirected)
+    const edge = this.edges.find(e =>
+      (e.u === source && e.v === target) || (e.u === target && e.v === source)
+    );
     if (edge) {
       edge.weight = weight;
     }
