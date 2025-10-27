@@ -1,5 +1,5 @@
 import * as d3 from 'd3';
-import { Graph, ForceDirectedLayout, CircularLayout, RandomLayout, SpiralLayout, ShellLayout, SpectralLayout, NetworkStats, CSVAdapter } from '../../network-js/src/index.js';
+import { Graph, ForceDirectedLayout, CircularLayout, RandomLayout, SpiralLayout, ShellLayout, SpectralLayout, KamadaKawaiLayout, BipartiteLayout, MultipartiteLayout, BFSLayout, NetworkStats, CSVAdapter } from '../../network-js/src/index.js';
 
 // Alpine.js component for Network Graph controls
 export function createNetworkGraphApp(graph, initialData) {
@@ -401,6 +401,45 @@ export function createNetworkGraphApp(graph, initialData) {
                         nodeProperties: spectralPropsMap.size > 0 ? spectralPropsMap : null
                     });
                     layoutName = 'Spectral';
+                    break;
+
+                case 'kamada-kawai':
+                    layout = new KamadaKawaiLayout(currentGraph, {
+                        iterations: 100,
+                        scale: scale,
+                        center: { x: width / 2, y: height / 2 }
+                    });
+                    layoutName = 'Kamada-Kawai';
+                    break;
+
+                case 'bipartite':
+                    layout = new BipartiteLayout(currentGraph, {
+                        align: 'vertical',
+                        scale: scale,
+                        center: { x: width / 2, y: height / 2 }
+                    });
+                    layoutName = 'Bipartite';
+                    break;
+
+                case 'multipartite':
+                    layout = new MultipartiteLayout(currentGraph, {
+                        align: 'vertical',
+                        scale: scale,
+                        center: { x: width / 2, y: height / 2 }
+                    });
+                    layoutName = 'Multipartite';
+                    break;
+
+                case 'bfs':
+                    // Use first node as start for BFS
+                    const firstNode = Array.from(currentGraph.nodes)[0];
+                    layout = new BFSLayout(currentGraph, {
+                        startNode: firstNode,
+                        align: 'vertical',
+                        scale: scale,
+                        center: { x: width / 2, y: height / 2 }
+                    });
+                    layoutName = 'BFS Layout';
                     break;
 
                 default:
