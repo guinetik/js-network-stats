@@ -201,9 +201,9 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
   }
 
   // Calculate scaling factor K
-  // IMPORTANT: Filter out both Infinity and 1e6 placeholder values for disconnected pairs
-  // Only use actual graph distances computed via BFS
-  const finiteDistances = distances.flat().filter(d => isFinite(d) && d < 1e6);
+  // IMPORTANT: Filter out placeholder distances for disconnected pairs
+  // Only use actual graph distances computed via BFS (distances <= Lmax)
+  const finiteDistances = distances.flat().filter(d => isFinite(d) && d <= Lmax);
 
   if (finiteDistances.length === 0) {
     console.warn('[Kamada-Kawai] All distances are infinite - graph may be disconnected!');
@@ -215,8 +215,8 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
   // Calculate K using a better formula that prevents it from becoming too small
   // NetworkX uses: K = sqrt(area / n)
   // Our "area" is approximately Ld * Ld
-  // Multiply by 3x to create more spacing for graphs with disconnected components
-  const Kval = K !== null ? K : Math.sqrt((Ld * Ld) / n) * 3;
+  // Multiply by 1.5x for better spacing (disconnected pairs now provide weak forces)
+  const Kval = K !== null ? K : Math.sqrt((Ld * Ld) / n) * 1.5;
 
   console.log('[Kamada-Kawai] Distance matrix stats:', {
     totalPairs: distances.flat().length,
@@ -287,11 +287,6 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
         const rij = Math.sqrt(dx * dx + dy * dy);
         const dij = distances[i][j];
 
-        // Skip disconnected node pairs (no forces between disconnected components)
-        if (!isFinite(dij) || dij >= 1e6) {
-          continue;
-        }
-
         if (rij === 0) continue; // Skip if nodes are at same position
 
         const lij = Kval * dij;
@@ -303,7 +298,9 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
 
         const rijOverLij = rij / lij;
 
-        // Spring force
+        // Spring force (works for both connected and disconnected pairs)
+        // Connected pairs: regular spring forces
+        // Disconnected pairs: weak attractive force (due to large lij) that helps spread components
         const Fspring = (rijOverLij - 1) / dij;
 
         // Check for NaN in force calculation
@@ -451,9 +448,11 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
  */
 function computeAllPairsShortestPaths(graph, nodes) {
   const n = nodes.length;
-  // Initialize with 1e6 for disconnected pairs (like NetworkX does)
-  // This avoids NaN issues with Infinity in calculations
-  const distances = Array(n).fill(null).map(() => Array(n).fill(1e6));
+  // For disconnected pairs, use a distance value that's meaningful for the graph
+  // Using n * 1.5 makes disconnected nodes appear far but still responsive to layout forces
+  // This prevents degenerate linear solutions while maintaining force dynamics
+  const disconnectedDistance = n * 1.5;
+  const distances = Array(n).fill(null).map(() => Array(n).fill(disconnectedDistance));
   const nodeIndex = {};
 
   nodes.forEach((node, i) => {
