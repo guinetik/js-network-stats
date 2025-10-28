@@ -213,11 +213,11 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
   const Lmax = finiteDistances.length > 0 ? Math.max(...finiteDistances) : 1;
   const Ld = 2 * Lmax; // length of domain edge
 
-  // Calculate K using a better formula that prevents it from becoming too small
-  // NetworkX uses: K = sqrt(area / n)
-  // Our "area" is approximately Ld * Ld
-  // Multiply by 1.5x for better spacing (disconnected pairs now provide weak forces)
-  const Kval = K !== null ? K : Math.sqrt((Ld * Ld) / n) * 1.5;
+  // Calculate K using igraph's formula: K = L0 / max_dij
+  // Where L0 = sqrt(n)
+  // This scales the spring constant appropriately for the graph size and distance scale
+  const L0 = Math.sqrt(n);
+  const Kval = K !== null ? K : L0 / Lmax;
 
   console.log('[Kamada-Kawai] Distance matrix stats:', {
     totalPairs: distances.flat().length,
@@ -321,8 +321,8 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
       }
 
       // Use a learning rate to prevent overshooting and oscillation
-      // Higher rate to escape local minima (linear patterns)
-      const learningRate = 0.15;
+      // Conservative rate for stable convergence
+      const learningRate = 0.1;
       const scaledDxi = learningRate * dxi;
       const scaledDyi = learningRate * dyi;
       delta += Math.sqrt(scaledDxi * scaledDxi + scaledDyi * scaledDyi);
@@ -528,12 +528,14 @@ function initializePositions(nodes, initialPositions) {
       }
     });
   } else {
-    // Random initial positions (not circular)
-    // Random init allows the algorithm to find proper 2D layouts instead of getting
-    // stuck in local minima. Circular initialization can cause degenerate linear solutions.
+    // Circular initial positions (igraph approach)
+    // L0 = sqrt(n), scaled by 0.36 empirically for good initial layout
+    const L0 = Math.sqrt(n);
+    const angle = (2 * Math.PI) / n;
+    const radius = 0.36 * L0;
     for (let i = 0; i < n; i++) {
-      const x = Math.random() - 0.5;  // Range [-0.5, 0.5]
-      const y = Math.random() - 0.5;  // Range [-0.5, 0.5]
+      const x = radius * Math.cos(i * angle);
+      const y = radius * Math.sin(i * angle);
       positions.push([x, y]);
     }
   }
