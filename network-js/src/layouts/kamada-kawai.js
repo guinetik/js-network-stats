@@ -59,7 +59,7 @@ export class KamadaKawaiLayout extends Layout {
    */
   constructor(graph, options = {}) {
     super(graph, {
-      iterations: 100,
+      iterations: 200,
       scale: 1,
       center: { x: 0, y: 0 },
       initialPositions: null,
@@ -282,8 +282,8 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
         const rij = Math.sqrt(dx * dx + dy * dy);
         const dij = distances[i][j];
 
-        // Skip disconnected node pairs (Infinity distance)
-        if (!isFinite(dij)) {
+        // Skip disconnected node pairs (Infinity or 1e6 placeholder distance)
+        if (!isFinite(dij) || dij >= 1e6) {
           continue;
         }
 
@@ -317,9 +317,13 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
         dyi = isNaN(dyi) ? 0 : dyi;
       }
 
-      delta += Math.sqrt(dxi * dxi + dyi * dyi);
-      pos[i][0] -= dxi;
-      pos[i][1] -= dyi;
+      // Use a learning rate to prevent overshooting and oscillation
+      const learningRate = 0.1;
+      const scaledDxi = learningRate * dxi;
+      const scaledDyi = learningRate * dyi;
+      delta += Math.sqrt(scaledDxi * scaledDxi + scaledDyi * scaledDyi);
+      pos[i][0] -= scaledDxi;
+      pos[i][1] -= scaledDyi;
 
       // Safety check after update
       if (isNaN(pos[i][0]) || isNaN(pos[i][1])) {
