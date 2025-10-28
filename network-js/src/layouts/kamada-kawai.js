@@ -202,11 +202,12 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
 
   // Calculate scaling factor K
   // IMPORTANT: Filter out placeholder distances for disconnected pairs
-  // Only use actual graph distances computed via BFS (distances <= Lmax)
-  const finiteDistances = distances.flat().filter(d => isFinite(d) && d <= Lmax);
+  // Disconnected pairs are set to n*1.5, so real BFS distances will be < n
+  const disconnectedDistance = n * 1.5;
+  const finiteDistances = distances.flat().filter(d => isFinite(d) && d < disconnectedDistance);
 
   if (finiteDistances.length === 0) {
-    console.warn('[Kamada-Kawai] All distances are infinite - graph may be disconnected!');
+    console.warn('[Kamada-Kawai] All distances are placeholder (disconnected)!');
   }
 
   const Lmax = finiteDistances.length > 0 ? Math.max(...finiteDistances) : 1;
