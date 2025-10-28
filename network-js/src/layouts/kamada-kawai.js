@@ -211,7 +211,11 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
 
   const Lmax = finiteDistances.length > 0 ? Math.max(...finiteDistances) : 1;
   const Ld = 2 * Lmax; // length of domain edge
-  const Kval = K !== null ? K : Ld / n;
+
+  // Calculate K using a better formula that prevents it from becoming too small
+  // NetworkX uses: K = sqrt(area / n)
+  // Our "area" is approximately Ld * Ld
+  const Kval = K !== null ? K : Math.sqrt((Ld * Ld) / n);
 
   console.log('[Kamada-Kawai] Distance matrix stats:', {
     totalPairs: distances.flat().length,
