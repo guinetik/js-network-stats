@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Brazilian Networks - Parallel Computation Demo</title>
+    <title>Network Explorer - Parallel Computation Demo</title>
     <link rel="stylesheet" href="../styles/main.css">
     <script>
         // Detect dark mode from localStorage (same as main app)
@@ -107,16 +107,16 @@
     </a>
 
     <!-- Split Layout -->
-    <div class="flex flex-col lg:flex-row h-screen" x-data="brazilianNetworksApp()">
+    <div class="flex flex-col lg:flex-row h-screen" x-data="explorerNetworkApp()">
         <!-- Left Panel: Controls & Info -->
         <div class="lg:w-1/3 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-r border-gray-200/50 dark:border-gray-700/50 overflow-y-auto p-6 space-y-6">
             <!-- Header -->
             <div>
                 <h1 class="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-                    🇧🇷 Brazilian Cities Networks
+                    Sample Networks
                 </h1>
                 <p class="text-gray-600 dark:text-gray-400">
-                    Explore real-world social networks from Brazilian cities with parallel computation.
+                    Explore sample networks with parallel computation.
                 </p>
             </div>
 
@@ -510,7 +510,6 @@
                     <li>🔍 <strong>Scroll</strong> to zoom in/out</li>
                     <li>👆 <strong>Drag background</strong> to pan</li>
                     <li>🎨 <strong>Node size</strong> = eigenvector centrality</li>
-                    <li>🇧🇷 <strong>Data</strong> = Real Brazilian city networks</li>
                 </ul>
             </div>
         </div>
@@ -533,7 +532,7 @@
         import * as d3 from 'd3';
         import Alpine from 'alpinejs';
         import NetworkGraph from '../src/networkgraph.d3.js';
-        import { createBrazilianNetworksApp } from '../js/brazilian-networks.js';
+        import { createNetworkExplorerApp } from '../js/network-explorer.js';
 
         // Make D3 available globally for NetworkGraph
         window.d3 = d3;
@@ -546,7 +545,7 @@
         const width = container.clientWidth;
         const height = container.clientHeight;
 
-        // Initialize the network graph with features for Brazilian networks
+        // Initialize the network graph with features for Sample networks
         const graph = new NetworkGraph('#graph-container', width, height, {
             features: ['degree', 'betweenness', 'clustering', 'eigenvector'],
             verbose: false
@@ -604,7 +603,7 @@
         });
 
         // Register Alpine component
-        window.brazilianNetworksApp = () => createBrazilianNetworksApp(graph);
+        window.explorerNetworkApp = () => createNetworkExplorerApp(graph);
 
         // Start Alpine
         Alpine.start();

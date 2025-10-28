@@ -408,7 +408,7 @@ export function createNetworkGraphApp(graph, initialData) {
 
                 case 'kamada-kawai':
                     layout = new KamadaKawaiLayout(currentGraph, {
-                        iterations: 100,
+                        iterations: 1000,  // Increased from 100 for proper convergence
                         scale: scale,
                         center: { x: width / 2, y: height / 2 }
                     });

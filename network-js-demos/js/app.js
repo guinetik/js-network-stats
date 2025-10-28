@@ -27,8 +27,8 @@ export function app() {
                 this.page = 'network';
             });
 
-            this.router.on('/brazilian', () => {
-                this.page = 'brazilian';
+            this.router.on('/explorer', () => {
+                this.page = 'explorer';
             });
 
             this.router.on('/family', () => {

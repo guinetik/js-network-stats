@@ -1,5 +1,5 @@
 import * as d3 from 'd3';
-import { Graph, ForceDirectedLayout, CircularLayout, RandomLayout, SpiralLayout, ShellLayout, SpectralLayout, KamadaKawaiLayout, BipartiteLayout, MultipartiteLayout, BFSLayout, LAYOUT_REGISTRY } from '../../network-js/src/index.js';
+import { Graph, ForceDirectedLayout, CircularLayout, RandomLayout, SpiralLayout, ShellLayout, SpectralLayout, KamadaKawaiLayout, BipartiteLayout, MultipartiteLayout, BFSLayout, LAYOUT_REGISTRY } from '@guinetik/network-js';
 // Import worker URL for Vite
 import workerUrl from '../../network-js/src/compute/network-worker.js?worker&url';
 
@@ -22,8 +22,8 @@ const NETWORKS = {
   }
 };
 
-// Alpine.js component for Brazilian Networks controls
-export function createBrazilianNetworksApp(graph) {
+// Alpine.js component for Network Explorer controls
+export function createNetworkExplorerApp(graph) {
   return {
     // Data properties
     selectedNetwork: '',
@@ -468,14 +468,23 @@ export function createBrazilianNetworksApp(graph) {
       let layout;
       let layoutName;
 
-      // Use smaller of width/height to determine scale
-      const scale = Math.min(width, height) / 2.5;
+      // Use a large fixed scale to give layouts room to spread out
+      // Let D3 zoom handle fitting to viewport
+      const nodeCount = currentGraph.numberOfNodes();
+
+      // Scale based on graph size - larger graphs need more space
+      const scale = nodeCount < 100 ? 500 :
+                   nodeCount < 500 ? 1500 :
+                   nodeCount < 1000 ? 3000 : 5000;
+
+      // Center at origin - D3 zoom will handle viewport positioning
+      const center = { x: 0, y: 0 };
 
       switch (this.selectedLayout) {
         case 'random':
           layout = new RandomLayout(currentGraph, {
             scale: scale,
-            center: { x: width / 2, y: height / 2 }
+            center: center
           });
           layoutName = 'Random';
           break;
@@ -483,7 +492,7 @@ export function createBrazilianNetworksApp(graph) {
         case 'circular':
           layout = new CircularLayout(currentGraph, {
             scale: scale,
-            center: { x: width / 2, y: height / 2 }
+            center: center
           });
           layoutName = 'Circular';
           break;
@@ -491,7 +500,7 @@ export function createBrazilianNetworksApp(graph) {
         case 'spiral':
           layout = new SpiralLayout(currentGraph, {
             scale: scale,
-            center: { x: width / 2, y: height / 2 },
+            center: center,
             resolution: 0.15  // Looser spiral (lower = fewer rotations per node)
           });
           layoutName = 'Spiral';
@@ -508,7 +517,7 @@ export function createBrazilianNetworksApp(graph) {
 
           layout = new ShellLayout(currentGraph, {
             scale: scale,
-            center: { x: width / 2, y: height / 2 },
+            center: center,
             nodeProperties: nodePropsMap.size > 0 ? nodePropsMap : null
           });
           layoutName = 'Shell';
@@ -540,7 +549,7 @@ export function createBrazilianNetworksApp(graph) {
 
           layout = new SpectralLayout(currentGraph, {
             scale: scale,
-            center: { x: width / 2, y: height / 2 },
+            center: center,
             nodeProperties: spectralPropsMap.size > 0 ? spectralPropsMap : null
           });
           layoutName = 'Spectral';
@@ -548,19 +557,24 @@ export function createBrazilianNetworksApp(graph) {
           break;
 
         case 'kamada-kawai':
+          // Kamada-Kawai needs many iterations (optimizes one node per iteration)
+          // For n nodes, need at least n iterations to touch each node once
+          // In practice, need 3-5 passes for convergence
+          const kkIterations = Math.max(1000, nodeCount * 10);
           layout = new KamadaKawaiLayout(currentGraph, {
-            iterations: 100,
+            iterations: kkIterations,
             scale: scale,
-            center: { x: width / 2, y: height / 2 }
+            center: center
           });
           layoutName = 'Kamada-Kawai';
+          console.log(`Kamada-Kawai: ${nodeCount} nodes, ${kkIterations} iterations`);
           break;
 
         case 'bipartite':
           layout = new BipartiteLayout(currentGraph, {
             align: 'vertical',
             scale: scale,
-            center: { x: width / 2, y: height / 2 }
+            center: center
           });
           layoutName = 'Bipartite';
           break;
@@ -569,7 +583,7 @@ export function createBrazilianNetworksApp(graph) {
           layout = new MultipartiteLayout(currentGraph, {
             align: 'vertical',
             scale: scale,
-            center: { x: width / 2, y: height / 2 }
+            center: center
           });
           layoutName = 'Multipartite';
           break;
@@ -581,7 +595,7 @@ export function createBrazilianNetworksApp(graph) {
             startNode: firstNode,
             align: 'vertical',
             scale: scale,
-            center: { x: width / 2, y: height / 2 }
+            center: center
           });
           layoutName = 'BFS Layout';
           break;
@@ -590,7 +604,7 @@ export function createBrazilianNetworksApp(graph) {
           layout = new ForceDirectedLayout(currentGraph, {
             iterations: 50,
             scale: scale,
-            center: { x: width / 2, y: height / 2 }
+            center: center
           });
           layoutName = 'Force-Directed';
       }
@@ -630,6 +644,14 @@ export function createBrazilianNetworksApp(graph) {
 
       // Update visualization (will happen in showGraphAfterCalculation, but call again to ensure)
       graph.updatePositions();
+
+      // Fit the graph to viewport now that positions are set
+      // Use setTimeout to ensure positions have been rendered first
+      setTimeout(() => {
+        graph.fitToView();
+        // Update label visibility after fitToView completes
+        setTimeout(() => graph.updateLabelVisibility(), 800);
+      }, 100);
 
       // Update info
       this.setNodeInfo('layout-applied', `Layout Applied: ${layoutName}`, {

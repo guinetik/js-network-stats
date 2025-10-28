@@ -200,7 +200,7 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
     throw err;
   }
 
-  // Calculate scaling factor K
+  // Calculate scaling factors following igraph's approach
   // IMPORTANT: Only use actual BFS distances (finite distances)
   // After replacement in computeAllPairsShortestPaths, all values are finite,
   // but we still filter out the special self-distance (0)
@@ -210,145 +210,206 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
     console.warn('[Kamada-Kawai] All distances are placeholder (disconnected)!');
   }
 
-  const Lmax = finiteDistances.length > 0 ? Math.max(...finiteDistances) : 1;
-  const Ld = 2 * Lmax; // length of domain edge
+  // Use reduce instead of Math.max(...) to avoid "too many function arguments" error
+  // for large graphs (spread operator has argument limit ~65k-100k)
+  const max_dij = finiteDistances.length > 0
+    ? finiteDistances.reduce((max, d) => Math.max(max, d), 0)
+    : 1;
 
-  // Calculate K using igraph's formula: K = L0 / max_dij
-  // Where L0 = sqrt(n)
-  // This scales the spring constant appropriately for the graph size and distance scale
+  // Following igraph's implementation:
+  // L0 = sqrt(n) - natural length scale
+  // L = L0 / max_dij - scales desired distances to fit layout space
+  // K = kkconst (default: n) - spring constant strength
   const L0 = Math.sqrt(n);
-  const Kval = K !== null ? K : L0 / Lmax;
+  const L = L0 / max_dij;
+  const kkconst = K !== null ? K : n; // Default to number of vertices like igraph
 
   console.log('[Kamada-Kawai] Distance matrix stats:', {
     totalPairs: distances.flat().length,
     finitePairs: finiteDistances.length,
     infinitePairs: distances.flat().length - finiteDistances.length,
-    Lmax,
-    Ld,
-    Kval,
-    isKvalFinite: isFinite(Kval)
+    max_dij,
+    L0,
+    L,
+    kkconst,
+    isKvalFinite: isFinite(kkconst) && isFinite(L),
+    avgDij: finiteDistances.reduce((a, b) => a + b, 0) / finiteDistances.length
   });
 
   reportProgress(progressCallback, 0.4);
 
-  // Optimization loop
-  const nodeIndex = {};
-  console.log('[Kamada-Kawai] About to call nodes.forEach for nodeIndex');
-  try {
-    nodes.forEach((node, i) => {
-      nodeIndex[node] = i;
-    });
-    console.log('[Kamada-Kawai] nodeIndex forEach completed successfully');
-  } catch (err) {
-    console.error('[Kamada-Kawai] Error in nodeIndex forEach:', err.message);
-    console.error('  nodes type:', typeof nodes);
-    console.error('  nodes isArray:', Array.isArray(nodes));
-    console.error('  nodes value:', nodes);
-    throw err;
-  }
+  // Pre-compute kij and lij matrices (following igraph)
+  const kij = Array(n).fill(null).map(() => Array(n).fill(0));
+  const lij = Array(n).fill(null).map(() => Array(n).fill(0));
 
-  // Check initial positions before optimization
-  console.log('[Kamada-Kawai] Checking initial positions before optimization loop');
-  let initialNaNCount = 0;
-  for (let i = 0; i < pos.length; i++) {
-    if (isNaN(pos[i][0]) || isNaN(pos[i][1])) {
-      initialNaNCount++;
-      if (initialNaNCount <= 3) {
-        console.warn('[Kamada-Kawai] Initial position has NaN at index', i, ':', pos[i]);
-      }
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      if (i === j) continue;
+      const dij = distances[i][j];
+      kij[i][j] = kkconst / (dij * dij);
+      lij[i][j] = L * dij;
     }
   }
-  if (initialNaNCount > 0) {
-    console.error('[Kamada-Kawai] WARNING: ' + initialNaNCount + ' initial positions have NaN!');
+
+  // Sample some kij and lij values to verify they're reasonable
+  if (n > 1) {
+    const sampleI = 0, sampleJ = 1;
+    const initialDist = Math.sqrt(
+      Math.pow(pos[sampleI][0] - pos[sampleJ][0], 2) +
+      Math.pow(pos[sampleI][1] - pos[sampleJ][1], 2)
+    );
+    console.log('[Kamada-Kawai] Sample spring values:', {
+      'graph_dist[0,1]': distances[sampleI][sampleJ],
+      'spring_const_kij[0,1]': kij[sampleI][sampleJ].toExponential(4),
+      'desired_dist_lij[0,1]': lij[sampleI][sampleJ].toFixed(4),
+      'initial_euclidean_dist': initialDist.toFixed(4),
+      'stress_ratio': (initialDist / lij[sampleI][sampleJ]).toFixed(4),
+      'force': (kij[sampleI][sampleJ] * Math.abs(initialDist - lij[sampleI][sampleJ])).toExponential(4)
+    });
   }
 
-  for (let iter = 0; iter < iterations; iter++) {
-    let delta = 0;
+  // Initialize gradient vectors D1 and D2 (following igraph lines 220-234)
+  const D1 = Array(n).fill(0);
+  const D2 = Array(n).fill(0);
 
-    // For each node
+  for (let m = 0; m < n; m++) {
     for (let i = 0; i < n; i++) {
-      const node = nodes[i];
-      const [xi, yi] = pos[i];
+      if (i === m) continue;
 
-      // Safety check: detect NaN early - first occurrence only
-      if ((isNaN(xi) || isNaN(yi)) && iter < 2) {
-        console.warn('[Kamada-Kawai] NaN detected early at iteration', iter, 'node index', i, 'node:', node);
+      const dx = pos[m][0] - pos[i][0];
+      const dy = pos[m][1] - pos[i][1];
+      const mi_dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (mi_dist === 0) continue;
+
+      D1[m] += kij[m][i] * (dx - lij[m][i] * dx / mi_dist);
+      D2[m] += kij[m][i] * (dy - lij[m][i] * dy / mi_dist);
+    }
+  }
+
+  // Log initial gradient statistics
+  const initialEnergies = D1.map((d1, i) => Math.sqrt(d1 * d1 + D2[i] * D2[i]));
+  const maxInitialEnergy = Math.max(...initialEnergies);
+  const avgInitialEnergy = initialEnergies.reduce((a, b) => a + b, 0) / n;
+  console.log('[Kamada-Kawai] Initial gradient stats:', {
+    maxEnergy: maxInitialEnergy.toFixed(4),
+    avgEnergy: avgInitialEnergy.toFixed(4),
+    threshold: Math.sqrt(threshold).toFixed(6)
+  });
+
+  // Optimization loop - following igraph's one-node-at-a-time approach
+  for (let iter = 0; iter < iterations; iter++) {
+    // Select node with maximum gradient (following igraph lines 246-253)
+    let m = 0;
+    let max_delta = -1;
+    for (let i = 0; i < n; i++) {
+      const delta = D1[i] * D1[i] + D2[i] * D2[i];
+      if (delta > max_delta) {
+        m = i;
+        max_delta = delta;
       }
+    }
 
-      // Calculate gradient
-      let dxi = 0;
-      let dyi = 0;
-
-      for (let j = 0; j < n; j++) {
-        if (i === j) continue;
-
-        const [xj, yj] = pos[j];
-        const dx = xi - xj;
-        const dy = yi - yj;
-        const rij = Math.sqrt(dx * dx + dy * dy);
-        const dij = distances[i][j];
-
-        if (rij === 0) continue; // Skip if nodes are at same position
-
-        const lij = Kval * dij;
-
-        // Safety check: avoid division issues
-        if (lij === 0) {
-          continue;
-        }
-
-        const rijOverLij = rij / lij;
-
-        // Spring force (works for both connected and disconnected pairs)
-        // Connected pairs: regular spring forces
-        // Disconnected pairs: weak attractive force (due to large lij) that helps spread components
-        const Fspring = (rijOverLij - 1) / dij;
-
-        // Check for NaN in force calculation
-        if (!isFinite(Fspring)) {
-          continue; // Skip invalid forces
-        }
-
-        dxi += Fspring * dx;
-        dyi += Fspring * dy;
-      }
-
-      // Check for NaN before updating position
-      if (isNaN(dxi) || isNaN(dyi)) {
-        console.warn('[Kamada-Kawai] NaN in delta at iteration', iter, 'node', i, 'dxi:', dxi, 'dyi:', dyi);
-        dxi = isNaN(dxi) ? 0 : dxi;
-        dyi = isNaN(dyi) ? 0 : dyi;
-      }
-
-      // Use a learning rate to prevent overshooting and oscillation
-      // Conservative rate for stable convergence
-      const learningRate = 0.1;
-      const scaledDxi = learningRate * dxi;
-      const scaledDyi = learningRate * dyi;
-      delta += Math.sqrt(scaledDxi * scaledDxi + scaledDyi * scaledDyi);
-      pos[i][0] -= scaledDxi;
-      pos[i][1] -= scaledDyi;
-
-      // Safety check after update
-      if (isNaN(pos[i][0]) || isNaN(pos[i][1])) {
-        console.error('[Kamada-Kawai] Position became NaN after update at iteration', iter, 'node', i, 'delta was:', dxi, dyi, 'position:', pos[i]);
-      }
+    // Check convergence
+    if (max_delta < threshold) {
+      console.log(`[Kamada-Kawai] Converged at iteration ${iter}/${iterations} with max_delta ${Math.sqrt(max_delta).toFixed(6)} (threshold: ${Math.sqrt(threshold).toFixed(6)})`);
+      break;
     }
 
     reportProgress(progressCallback, 0.4 + (0.6 * (iter + 1) / iterations));
 
-    // Log convergence progress
-    if (iter % 50 === 0 || iter < 5) {
-      console.log(`[Kamada-Kawai] Iteration ${iter}: delta = ${delta.toFixed(6)}, threshold = ${threshold}`);
+    // Enhanced progress logging
+    if (iter % 500 === 0 || iter < 5 || iter === iterations - 1) {
+      console.log(`[Kamada-Kawai] Iteration ${iter}/${iterations}: max_delta = ${Math.sqrt(max_delta).toFixed(6)}, node ${m}`);
     }
 
-    // Check convergence - but run full iterations since gradient descent
-    // converges differently than igraph's one-node-at-a-time approach
-    // Disable early stopping for gradient descent on disconnected graphs
-    // if (delta < threshold && iter > 300) {
-    //   console.log(`[Kamada-Kawai] Converged at iteration ${iter} with delta ${delta.toFixed(6)}`);
-    //   break;
-    // }
+    const old_x = pos[m][0];
+    const old_y = pos[m][1];
+
+    // Calculate Hessian matrix elements (following igraph lines 260-273)
+    let A = 0, B = 0, C = 0;
+    for (let i = 0; i < n; i++) {
+      if (i === m) continue;
+
+      const dx = old_x - pos[i][0];
+      const dy = old_y - pos[i][1];
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist === 0) continue;
+
+      const den = dist * (dx * dx + dy * dy);
+      A += kij[m][i] * (1 - lij[m][i] * dy * dy / den);
+      B += kij[m][i] * lij[m][i] * dx * dy / den;
+      C += kij[m][i] * (1 - lij[m][i] * dx * dx / den);
+    }
+
+    // Solve 2x2 linear system using Cramer's rule (following igraph lines 288-295)
+    let delta_x = 0, delta_y = 0;
+    const KK_EPS = 1e-13;
+    const myD1 = D1[m];
+    const myD2 = D2[m];
+
+    if (myD1 * myD1 + myD2 * myD2 >= KK_EPS * KK_EPS) {
+      const det = C * A - B * B;
+      if (Math.abs(det) > 1e-10) {
+        delta_y = (B * myD1 - A * myD2) / det;
+        delta_x = (B * myD2 - C * myD1) / det;
+      } else if (iter < 5) {
+        console.warn(`[Kamada-Kawai] Iteration ${iter}: Singular matrix (det=${det.toExponential(2)}) for node ${m}`);
+      }
+    } else if (iter < 5) {
+      console.warn(`[Kamada-Kawai] Iteration ${iter}: Gradient too small for node ${m}`);
+    }
+
+    // Debug: Log deltas for first few iterations
+    if (iter < 3 && m === 0) {
+      console.log(`[Kamada-Kawai] Iteration ${iter}, node ${m}:`, {
+        A: A.toFixed(4),
+        B: B.toFixed(4),
+        C: C.toFixed(4),
+        det: (C * A - B * B).toExponential(4),
+        myD1: myD1.toFixed(4),
+        myD2: myD2.toFixed(4),
+        delta_x: delta_x.toFixed(6),
+        delta_y: delta_y.toFixed(6),
+        old_pos: [old_x.toFixed(2), old_y.toFixed(2)]
+      });
+    }
+
+    const new_x = old_x + delta_x;
+    const new_y = old_y + delta_y;
+
+    // Update gradients incrementally (following igraph lines 315-341)
+    D1[m] = 0;
+    D2[m] = 0;
+
+    for (let i = 0; i < n; i++) {
+      if (i === m) continue;
+
+      const old_dx = old_x - pos[i][0];
+      const old_dy = old_y - pos[i][1];
+      const old_mi_dist = Math.sqrt(old_dx * old_dx + old_dy * old_dy);
+
+      const new_dx = new_x - pos[i][0];
+      const new_dy = new_y - pos[i][1];
+      const new_mi_dist = Math.sqrt(new_dx * new_dx + new_dy * new_dy);
+
+      if (old_mi_dist === 0 || new_mi_dist === 0) continue;
+
+      // Update gradient for node i
+      D1[i] -= kij[m][i] * (-old_dx + lij[m][i] * old_dx / old_mi_dist);
+      D2[i] -= kij[m][i] * (-old_dy + lij[m][i] * old_dy / old_mi_dist);
+      D1[i] += kij[m][i] * (-new_dx + lij[m][i] * new_dx / new_mi_dist);
+      D2[i] += kij[m][i] * (-new_dy + lij[m][i] * new_dy / new_mi_dist);
+
+      // Update gradient for node m
+      D1[m] += kij[m][i] * (new_dx - lij[m][i] * new_dx / new_mi_dist);
+      D2[m] += kij[m][i] * (new_dy - lij[m][i] * new_dy / new_mi_dist);
+    }
+
+    // Update position
+    pos[m][0] = new_x;
+    pos[m][1] = new_y;
   }
 
   reportProgress(progressCallback, 0.95);
@@ -529,15 +590,31 @@ function initializePositions(nodes, initialPositions) {
       }
     });
   } else {
-    // Circular initial positions (igraph approach)
-    // L0 = sqrt(n), scaled by 0.36 empirically for good initial layout
+    // Choose initialization strategy based on graph size
     const L0 = Math.sqrt(n);
-    const angle = (2 * Math.PI) / n;
-    const radius = 0.36 * L0;
-    for (let i = 0; i < n; i++) {
-      const x = radius * Math.cos(i * angle);
-      const y = radius * Math.sin(i * angle);
-      positions.push([x, y]);
+
+    if (n > 100) {
+      // Random initialization for large graphs
+      // Circular creates too much artificial structure
+      // Spread nodes in a square region roughly matching desired final scale
+      const spread = L0 * 3; // Larger spread to avoid initial overcrowding
+      console.log(`[Kamada-Kawai] Random initialization: spread=${spread.toFixed(2)}, L0=${L0.toFixed(2)}`);
+      for (let i = 0; i < n; i++) {
+        // Random positions in [-spread/2, spread/2] x [-spread/2, spread/2]
+        const x = (Math.random() - 0.5) * spread;
+        const y = (Math.random() - 0.5) * spread;
+        positions.push([x, y]);
+      }
+    } else {
+      // Circular initial positions for small graphs
+      const angle = (2 * Math.PI) / n;
+      const radius = L0 * 2;
+      console.log(`[Kamada-Kawai] Circular initialization: radius=${radius.toFixed(2)}, L0=${L0.toFixed(2)}`);
+      for (let i = 0; i < n; i++) {
+        const x = radius * Math.cos(i * angle);
+        const y = radius * Math.sin(i * angle);
+        positions.push([x, y]);
+      }
     }
   }
 

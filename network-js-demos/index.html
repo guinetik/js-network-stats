@@ -52,12 +52,12 @@
                             Network Graph
                         </a>
                         <a
-                            @click.prevent="navigate('/brazilian')"
-                            href="/brazilian"
+                            @click.prevent="navigate('/explorer')"
+                            href="/explorer"
                             class="nav-link"
-                            :class="page === 'brazilian' && 'nav-link-active'"
+                            :class="page === 'explorer' && 'nav-link-active'"
                         >
-                            🇧🇷 Brazilian Networks
+                            Network Explorer
                         </a>
                         <a
                             @click.prevent="navigate('/family')"
@@ -122,8 +122,8 @@
             <div x-show="page === 'network'" x-cloak class="page-transition">
                 <iframe src="examples/network-graph.html" class="w-full h-screen border-0"></iframe>
             </div>
-            <div x-show="page === 'brazilian'" x-cloak class="page-transition">
-                <iframe src="examples/brazilian-networks.html" class="w-full h-screen border-0"></iframe>
+            <div x-show="page === 'explorer'" x-cloak class="page-transition">
+                <iframe src="examples/explorer.html" class="w-full h-screen border-0"></iframe>
             </div>
             <div x-show="page === 'family'" x-cloak class="page-transition">
                 <iframe src="examples/family-tree.html" class="w-full h-screen border-0"></iframe>

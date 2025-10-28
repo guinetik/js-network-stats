@@ -14,7 +14,7 @@ export default defineConfig({
         family: './family.html',
         'network-graph': './examples/network-graph.html',
         'family-tree': './examples/family-tree.html',
-        'brazilian-networks': './examples/brazilian-networks.html'
+        'explorer': './examples/explorer.html'
       }
     }
   },
