@@ -59,7 +59,7 @@ export class KamadaKawaiLayout extends Layout {
    */
   constructor(graph, options = {}) {
     super(graph, {
-      iterations: 500,
+      iterations: 1000,
       scale: 1,
       center: { x: 0, y: 0 },
       initialPositions: null,
@@ -201,10 +201,10 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
   }
 
   // Calculate scaling factor K
-  // IMPORTANT: Filter out placeholder distances for disconnected pairs
-  // Disconnected pairs are set to n*1.5, so real BFS distances will be < n
-  const disconnectedDistance = n * 1.5;
-  const finiteDistances = distances.flat().filter(d => isFinite(d) && d < disconnectedDistance);
+  // IMPORTANT: Only use actual BFS distances (finite distances)
+  // After replacement in computeAllPairsShortestPaths, all values are finite,
+  // but we still filter out the special self-distance (0)
+  const finiteDistances = distances.flat().filter(d => isFinite(d) && d > 0);
 
   if (finiteDistances.length === 0) {
     console.warn('[Kamada-Kawai] All distances are placeholder (disconnected)!');
@@ -449,11 +449,8 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
  */
 function computeAllPairsShortestPaths(graph, nodes) {
   const n = nodes.length;
-  // For disconnected pairs, use a distance value that's meaningful for the graph
-  // Using n * 1.5 makes disconnected nodes appear far but still responsive to layout forces
-  // This prevents degenerate linear solutions while maintaining force dynamics
-  const disconnectedDistance = n * 1.5;
-  const distances = Array(n).fill(null).map(() => Array(n).fill(disconnectedDistance));
+  // Initialize with Infinity (igraph approach)
+  const distances = Array(n).fill(null).map(() => Array(n).fill(Infinity));
   const nodeIndex = {};
 
   nodes.forEach((node, i) => {
@@ -481,6 +478,26 @@ function computeAllPairsShortestPaths(graph, nodes) {
           visited.add(neighbor);
           queue.push([neighbor, dist + 1]);
         }
+      }
+    }
+  }
+
+  // Find maximum finite distance
+  let max_dij = 0;
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      if (isFinite(distances[i][j]) && distances[i][j] > max_dij) {
+        max_dij = distances[i][j];
+      }
+    }
+  }
+
+  // Replace infinite distances with max_dij (igraph approach)
+  // This effectively makes the graph connected
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      if (distances[i][j] > max_dij) {
+        distances[i][j] = max_dij;
       }
     }
   }
