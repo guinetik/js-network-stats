@@ -59,7 +59,7 @@ export class KamadaKawaiLayout extends Layout {
    */
   constructor(graph, options = {}) {
     super(graph, {
-      iterations: 200,
+      iterations: 500,
       scale: 1,
       center: { x: 0, y: 0 },
       initialPositions: null,
@@ -322,7 +322,8 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
       }
 
       // Use a learning rate to prevent overshooting and oscillation
-      const learningRate = 0.1;
+      // Higher rate allows better exploration from random initialization
+      const learningRate = 0.2;
       const scaledDxi = learningRate * dxi;
       const scaledDyi = learningRate * dyi;
       delta += Math.sqrt(scaledDxi * scaledDxi + scaledDyi * scaledDyi);
@@ -502,11 +503,12 @@ function initializePositions(nodes, initialPositions) {
       }
     });
   } else {
-    // Circular initial positions
-    const angle = (2 * Math.PI) / n;
+    // Random initial positions (not circular)
+    // Random init allows the algorithm to find proper 2D layouts instead of getting
+    // stuck in local minima. Circular initialization can cause degenerate linear solutions.
     for (let i = 0; i < n; i++) {
-      const x = Math.cos(i * angle);
-      const y = Math.sin(i * angle);
+      const x = Math.random() - 0.5;  // Range [-0.5, 0.5]
+      const y = Math.random() - 0.5;  // Range [-0.5, 0.5]
       positions.push([x, y]);
     }
   }
