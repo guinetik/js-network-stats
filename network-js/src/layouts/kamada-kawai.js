@@ -286,24 +286,28 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
         const rij = Math.sqrt(dx * dx + dy * dy);
         const dij = distances[i][j];
 
-        // Skip disconnected node pairs (Infinity or 1e6 placeholder distance)
-        if (!isFinite(dij) || dij >= 1e6) {
-          continue;
-        }
-
         if (rij === 0) continue; // Skip if nodes are at same position
 
-        const lij = Kval * dij;
+        let Fspring = 0;
 
-        // Safety check: avoid division issues
-        if (lij === 0) {
-          continue;
+        if (!isFinite(dij) || dij >= 1e6) {
+          // For disconnected pairs, apply weak repulsive force to push components apart
+          // Force inversely proportional to distance (classic repulsion)
+          const minDistance = 1.0; // Minimum distance to prevent division by near-zero
+          const repulsiveDistance = Math.max(rij, minDistance);
+          Fspring = -1.0 / (repulsiveDistance * repulsiveDistance); // Weak repulsion
+        } else {
+          // For connected pairs, use spring force
+          const lij = Kval * dij;
+
+          // Safety check: avoid division issues
+          if (lij === 0) {
+            continue;
+          }
+
+          const rijOverLij = rij / lij;
+          Fspring = (rijOverLij - 1) / dij;
         }
-
-        const rijOverLij = rij / lij;
-
-        // Spring force
-        const Fspring = (rijOverLij - 1) / dij;
 
         // Check for NaN in force calculation
         if (!isFinite(Fspring)) {
@@ -338,8 +342,15 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
 
     reportProgress(progressCallback, 0.4 + (0.6 * (iter + 1) / iterations));
 
-    // Check convergence
-    if (delta < threshold) {
+    // Log convergence progress
+    if (iter % 50 === 0 || iter < 5) {
+      console.log(`[Kamada-Kawai] Iteration ${iter}: delta = ${delta.toFixed(6)}, threshold = ${threshold}`);
+    }
+
+    // Check convergence - but be more lenient
+    // Only stop if delta is very small AND we've done at least 100 iterations
+    if (delta < threshold && iter > 100) {
+      console.log(`[Kamada-Kawai] Converged at iteration ${iter} with delta ${delta.toFixed(6)}`);
       break;
     }
   }
