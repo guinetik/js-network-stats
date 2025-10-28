@@ -215,7 +215,8 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
   // Calculate K using a better formula that prevents it from becoming too small
   // NetworkX uses: K = sqrt(area / n)
   // Our "area" is approximately Ld * Ld
-  const Kval = K !== null ? K : Math.sqrt((Ld * Ld) / n);
+  // Multiply by 3x to create more spacing for graphs with disconnected components
+  const Kval = K !== null ? K : Math.sqrt((Ld * Ld) / n) * 3;
 
   console.log('[Kamada-Kawai] Distance matrix stats:', {
     totalPairs: distances.flat().length,
@@ -322,7 +323,8 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
       }
 
       // Use a learning rate to prevent overshooting and oscillation
-      const learningRate = 0.05;
+      // Higher rate to escape local minima (linear patterns)
+      const learningRate = 0.15;
       const scaledDxi = learningRate * dxi;
       const scaledDyi = learningRate * dyi;
       delta += Math.sqrt(scaledDxi * scaledDxi + scaledDyi * scaledDyi);
