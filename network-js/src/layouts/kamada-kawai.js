@@ -201,8 +201,9 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
   }
 
   // Calculate scaling factor K
-  // IMPORTANT: Remove Infinity values (disconnected nodes) before finding max
-  const finiteDistances = distances.flat().filter(d => isFinite(d));
+  // IMPORTANT: Filter out both Infinity and 1e6 placeholder values for disconnected pairs
+  // Only use actual graph distances computed via BFS
+  const finiteDistances = distances.flat().filter(d => isFinite(d) && d < 1e6);
 
   if (finiteDistances.length === 0) {
     console.warn('[Kamada-Kawai] All distances are infinite - graph may be disconnected!');
