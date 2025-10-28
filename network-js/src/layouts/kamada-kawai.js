@@ -342,12 +342,13 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
       console.log(`[Kamada-Kawai] Iteration ${iter}: delta = ${delta.toFixed(6)}, threshold = ${threshold}`);
     }
 
-    // Check convergence - require substantial progress before stopping
-    // Only stop if delta is very small AND we've done at least 300 iterations
-    if (delta < threshold && iter > 300) {
-      console.log(`[Kamada-Kawai] Converged at iteration ${iter} with delta ${delta.toFixed(6)}`);
-      break;
-    }
+    // Check convergence - but run full iterations since gradient descent
+    // converges differently than igraph's one-node-at-a-time approach
+    // Disable early stopping for gradient descent on disconnected graphs
+    // if (delta < threshold && iter > 300) {
+    //   console.log(`[Kamada-Kawai] Converged at iteration ${iter} with delta ${delta.toFixed(6)}`);
+    //   break;
+    // }
   }
 
   reportProgress(progressCallback, 0.95);
