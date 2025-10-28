@@ -286,28 +286,24 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
         const rij = Math.sqrt(dx * dx + dy * dy);
         const dij = distances[i][j];
 
+        // Skip disconnected node pairs (no forces between disconnected components)
+        if (!isFinite(dij) || dij >= 1e6) {
+          continue;
+        }
+
         if (rij === 0) continue; // Skip if nodes are at same position
 
-        let Fspring = 0;
+        const lij = Kval * dij;
 
-        if (!isFinite(dij) || dij >= 1e6) {
-          // For disconnected pairs, apply weak repulsive force to push components apart
-          // Force inversely proportional to distance (classic repulsion)
-          const minDistance = 1.0; // Minimum distance to prevent division by near-zero
-          const repulsiveDistance = Math.max(rij, minDistance);
-          Fspring = -1.0 / (repulsiveDistance * repulsiveDistance); // Weak repulsion
-        } else {
-          // For connected pairs, use spring force
-          const lij = Kval * dij;
-
-          // Safety check: avoid division issues
-          if (lij === 0) {
-            continue;
-          }
-
-          const rijOverLij = rij / lij;
-          Fspring = (rijOverLij - 1) / dij;
+        // Safety check: avoid division issues
+        if (lij === 0) {
+          continue;
         }
+
+        const rijOverLij = rij / lij;
+
+        // Spring force
+        const Fspring = (rijOverLij - 1) / dij;
 
         // Check for NaN in force calculation
         if (!isFinite(Fspring)) {
@@ -326,8 +322,7 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
       }
 
       // Use a learning rate to prevent overshooting and oscillation
-      // Higher rate allows better exploration from random initialization
-      const learningRate = 0.2;
+      const learningRate = 0.05;
       const scaledDxi = learningRate * dxi;
       const scaledDyi = learningRate * dyi;
       delta += Math.sqrt(scaledDxi * scaledDxi + scaledDyi * scaledDyi);
@@ -347,9 +342,9 @@ export async function kamadaKawaiCompute(graphData, options, progressCallback) {
       console.log(`[Kamada-Kawai] Iteration ${iter}: delta = ${delta.toFixed(6)}, threshold = ${threshold}`);
     }
 
-    // Check convergence - but be more lenient
-    // Only stop if delta is very small AND we've done at least 100 iterations
-    if (delta < threshold && iter > 100) {
+    // Check convergence - require substantial progress before stopping
+    // Only stop if delta is very small AND we've done at least 300 iterations
+    if (delta < threshold && iter > 300) {
       console.log(`[Kamada-Kawai] Converged at iteration ${iter} with delta ${delta.toFixed(6)}`);
       break;
     }
