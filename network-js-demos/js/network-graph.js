@@ -2,7 +2,7 @@ import * as d3 from 'd3';
 import { Graph, ForceDirectedLayout, CircularLayout, RandomLayout, SpiralLayout, ShellLayout, SpectralLayout, KamadaKawaiLayout, BipartiteLayout, MultipartiteLayout, BFSLayout, NetworkStats, CSVAdapter, LAYOUT_REGISTRY } from '../../network-js/src/index.js';
 
 // Alpine.js component for Network Graph controls
-export function createNetworkGraphApp(graph, initialData) {
+export function createNetworkGraphApp(graph, initialData, containerElement) {
     return {
         // Data properties
         selectedDataset: 'default',
@@ -22,6 +22,12 @@ export function createNetworkGraphApp(graph, initialData) {
 
         // Layout state (prevent infinite loops)
         isApplyingLayout: false,
+
+        // Store references for cleanup
+        graph: graph,
+        containerElement: containerElement,
+        resizeHandler: null,
+        visibilityHandler: null,
 
         // Initialization
         init() {
@@ -43,6 +49,54 @@ export function createNetworkGraphApp(graph, initialData) {
             graph.setNodeInfoHideCallback = () => {
                 this.setNodeInfo('default', 'Hover over a node to see details...');
             };
+
+            // Set up resize handler
+            this.resizeHandler = () => {
+                if (!this.containerElement) return;
+                const newWidth = this.containerElement.clientWidth;
+                const newHeight = this.containerElement.clientHeight;
+                this.graph.width = newWidth;
+                this.graph.height = newHeight;
+                this.graph.svg.attr('width', newWidth).attr('height', newHeight);
+                this.graph.simulation.force('center', d3.forceCenter(newWidth / 2, newHeight / 2));
+                this.graph.simulation.force('x', d3.forceX(newWidth / 2).strength(0.1));
+                this.graph.simulation.force('y', d3.forceY(newWidth / 2).strength(0.1));
+            };
+            window.addEventListener('resize', this.resizeHandler);
+
+            // Set up visibility handler
+            this.visibilityHandler = () => {
+                if (document.hidden && this.graph && this.graph.simulation) {
+                    this.graph.simulation.stop();
+                } else if (!document.hidden && this.graph && this.graph.simulation) {
+                    this.graph.simulation.restart();
+                }
+            };
+            document.addEventListener('visibilitychange', this.visibilityHandler);
+        },
+
+        // Cleanup method
+        destroy() {
+            console.log('Destroying network-graph component');
+
+            // Remove event listeners
+            if (this.resizeHandler) {
+                window.removeEventListener('resize', this.resizeHandler);
+                this.resizeHandler = null;
+            }
+
+            if (this.visibilityHandler) {
+                document.removeEventListener('visibilitychange', this.visibilityHandler);
+                this.visibilityHandler = null;
+            }
+
+            // Destroy graph
+            if (this.graph) {
+                if (this.graph.destroy) {
+                    this.graph.destroy();
+                }
+                this.graph = null;
+            }
         },
 
         // Community detection function (NOW ASYNC!)
@@ -84,10 +138,10 @@ export function createNetworkGraphApp(graph, initialData) {
 
         // Control methods
         addRandomNode() {
-            const newNodeId = `Node${graph.data.nodes.length + 1}`;
-            const randomExisting = graph.data.nodes[Math.floor(Math.random() * graph.data.nodes.length)];
+            const newNodeId = `Node${this.graph.data.nodes.length + 1}`;
+            const randomExisting = this.graph.data.nodes[Math.floor(Math.random() * this.graph.data.nodes.length)];
 
-            graph.addNode([randomExisting.id], newNodeId, Math.floor(Math.random() * 5) + 1);
+            this.graph.addNode([randomExisting.id], newNodeId, Math.floor(Math.random() * 5) + 1);
 
             this.setNodeInfo('node-added', 'Node Added', {
                 nodeId: newNodeId,
@@ -96,14 +150,14 @@ export function createNetworkGraphApp(graph, initialData) {
         },
 
         addSpecificNode() {
-            const aliceNode = graph.data.nodes.find(n => n.id === 'Alice');
+            const aliceNode = this.graph.data.nodes.find(n => n.id === 'Alice');
             if (!aliceNode) {
                 this.setNodeInfo('error', '"Alice" node not found in current graph');
                 return;
             }
 
-            const newNodeId = `Friend${graph.data.nodes.length + 1}`;
-            graph.addNode(['Alice'], newNodeId, 2);
+            const newNodeId = `Friend${this.graph.data.nodes.length + 1}`;
+            this.graph.addNode(['Alice'], newNodeId, 2);
 
             this.setNodeInfo('node-added', 'Node Added to Alice', {
                 nodeId: newNodeId,
@@ -112,15 +166,15 @@ export function createNetworkGraphApp(graph, initialData) {
         },
 
         removeRandomNode() {
-            if (graph.data.nodes.length <= 1) {
+            if (this.graph.data.nodes.length <= 1) {
                 this.setNodeInfo('error', 'Cannot remove - graph needs at least one node');
                 return;
             }
 
-            const randomNode = graph.data.nodes[Math.floor(Math.random() * graph.data.nodes.length)];
+            const randomNode = this.graph.data.nodes[Math.floor(Math.random() * this.graph.data.nodes.length)];
             const nodeId = randomNode.id;
 
-            graph.removeNode(nodeId);
+            this.graph.removeNode(nodeId);
 
             this.setNodeInfo('node-removed', 'Node Removed', {
                 nodeId: nodeId
@@ -244,7 +298,7 @@ export function createNetworkGraphApp(graph, initialData) {
                 this.nameCounter = 1;
 
                 // Load new data into graph
-                graph.setData(newData.nodes, newData.links);
+                this.graph.setData(newData.nodes, newData.links);
                 // Theme will automatically apply colors
 
                 // Auto-apply selected layout if it's not "none" AND we're not already applying a layout
@@ -265,33 +319,44 @@ export function createNetworkGraphApp(graph, initialData) {
         },
 
         async applyLayoutAlgorithm() {
+            console.log('applyLayoutAlgorithm called', {
+                hasContainerElement: !!this.containerElement,
+                hasGraph: !!this.graph,
+                isApplyingLayout: this.isApplyingLayout
+            });
+
             // Set flag to prevent infinite loops
             this.isApplyingLayout = true;
 
-            const container = document.getElementById('graph-container');
+            const container = this.containerElement;
+            if (!container) {
+                console.error('Container element not found', this);
+                this.isApplyingLayout = false;
+                return;
+            }
             const width = container.clientWidth;
             const height = container.clientHeight;
 
             // Handle "None" - re-enable D3 physics (no loading needed)
             if (this.selectedLayout === 'none') {
                 // Clear custom layout flag
-                graph.customLayoutActive = false;
+                this.graph.customLayoutActive = false;
 
                 // Unfix all nodes
-                graph.data.nodes.forEach(node => {
+                this.graph.data.nodes.forEach(node => {
                     node.fx = null;
                     node.fy = null;
                 });
 
                 // Re-enable all D3 forces (matching initSimulation configuration)
-                graph.simulation
+                this.graph.simulation
                     .force('charge', d3.forceManyBody().strength(-800).distanceMax(800))
-                    .force('link', d3.forceLink(graph.data.links).id(d => d.id).distance(100).strength(0.5))
+                    .force('link', d3.forceLink(this.graph.data.links).id(d => d.id).distance(100).strength(0.5))
                     .force('center', d3.forceCenter(width / 2, height / 2).strength(0.05))
                     .force('x', d3.forceX(width / 2).strength(0.03))
                     .force('y', d3.forceY(height / 2).strength(0.03))
                     .force('collision', d3.forceCollide().radius(d => 6 + (d.centrality || 0) * 14).strength(0.7))
-                    .force('boundary', graph.createBoundaryForce())
+                    .force('boundary', this.graph.createBoundaryForce())
                     .alpha(1)
                     .restart();
 
@@ -307,20 +372,20 @@ export function createNetworkGraphApp(graph, initialData) {
             }
 
             // Show loading state for custom layouts
-            graph.hideGraphDuringCalculation();
+            this.graph.hideGraphDuringCalculation();
             this.setNodeInfo('loading', 'Calculating layout positions...');
 
             // Build Graph object from current data
             const currentGraph = new Graph();
 
             // Add all nodes
-            const nodesArray = Array.isArray(graph.data.nodes) ? graph.data.nodes : Array.from(graph.data.nodes);
+            const nodesArray = Array.isArray(this.graph.data.nodes) ? this.graph.data.nodes : Array.from(this.graph.data.nodes);
             nodesArray.forEach(node => {
                 currentGraph.addNode(node.id);
             });
 
             // Add all edges
-            const linksArray = Array.isArray(graph.data.links) ? graph.data.links : Array.from(graph.data.links);
+            const linksArray = Array.isArray(this.graph.data.links) ? this.graph.data.links : Array.from(this.graph.data.links);
             linksArray.forEach(link => {
                 const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
                 const targetId = typeof link.target === 'object' ? link.target.id : link.target;
@@ -363,7 +428,7 @@ export function createNetworkGraphApp(graph, initialData) {
                 case 'shell':
                     // Build nodeProperties map from visualization nodes if stats are available
                     const nodePropsMap = new Map();
-                    graph.data.nodes.forEach(node => {
+                    this.graph.data.nodes.forEach(node => {
                         if (node.degree !== undefined) {
                             nodePropsMap.set(node.id, { degree: node.degree });
                         }
@@ -381,7 +446,7 @@ export function createNetworkGraphApp(graph, initialData) {
                     // Build nodeProperties map with Laplacian eigenvector coordinates if available
                     const spectralPropsMap = new Map();
                     let hasSpectralData = false;
-                    graph.data.nodes.forEach(node => {
+                    this.graph.data.nodes.forEach(node => {
                         if (node.laplacian_x !== undefined && node.laplacian_y !== undefined) {
                             spectralPropsMap.set(node.id, {
                                 laplacian_x: node.laplacian_x,
@@ -393,7 +458,7 @@ export function createNetworkGraphApp(graph, initialData) {
 
                     if (!hasSpectralData) {
                         this.setNodeInfo('error', 'Spectral layout requires eigenvector-laplacian stat. Include it in analysis.');
-                        graph.showGraphAfterCalculation();  // Show graph again since we're not proceeding with layout
+                        this.graph.showGraphAfterCalculation();  // Show graph again since we're not proceeding with layout
                         this.isApplyingLayout = false;
                         return;
                     }
@@ -458,10 +523,10 @@ export function createNetworkGraphApp(graph, initialData) {
             const positions = await layout.getPositions();
 
             // Set custom layout flag to prevent D3 simulation from restarting
-            graph.customLayoutActive = true;
+            this.graph.customLayoutActive = true;
 
             // DISABLE D3 forces to prevent interference
-            graph.simulation
+            this.graph.simulation
                 .force('charge', null)
                 .force('link', null)
                 .force('x', null)
@@ -469,7 +534,7 @@ export function createNetworkGraphApp(graph, initialData) {
                 .stop();
 
             // Apply positions to nodes and FIX them in place
-            graph.data.nodes.forEach(node => {
+            this.graph.data.nodes.forEach(node => {
                 const pos = positions[node.id];
                 if (pos) {
                     node.x = pos.x;
@@ -480,10 +545,10 @@ export function createNetworkGraphApp(graph, initialData) {
             });
 
             // Show graph now that positions are calculated
-            graph.showGraphAfterCalculation();
+            this.graph.showGraphAfterCalculation();
 
             // Update visualization (will happen in showGraphAfterCalculation, but call again to ensure)
-            graph.updatePositions();
+            this.graph.updatePositions();
 
             // Update info
             this.setNodeInfo('layout-applied', `Layout Applied: ${layoutName}`, {
