@@ -1,0 +1,365 @@
+/**
+ * Main Styles
+ * Semantic CSS classes using Tailwind utilities
+ */
+
+@import './variables.css';
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+/* Base Styles */
+@layer base {
+  * {
+    @apply transition-colors duration-200;
+  }
+
+  html {
+    background: transparent;
+  }
+
+  body {
+    @apply text-[var(--color-text-primary)] antialiased;
+    @apply min-h-screen;
+    background: transparent;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-bold text-[var(--color-text-primary)];
+  }
+
+  h1 { @apply text-4xl; }
+  h2 { @apply text-3xl; }
+  h3 { @apply text-2xl; }
+  h4 { @apply text-xl; }
+
+  a {
+    @apply text-[var(--color-accent)] hover:text-[var(--color-accent-hover)];
+    @apply transition-colors duration-[var(--transition-fast)];
+  }
+}
+
+/* Layout Components */
+@layer components {
+  /* Container */
+  .container-main {
+    @apply max-w-[var(--container-max-width)] mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  /* Header */
+  .header {
+    @apply sticky top-0 z-50;
+    @apply backdrop-blur-md border-b border-[var(--color-border)];
+    background-color: var(--color-bg-secondary);
+    opacity: 0.95;
+    height: var(--header-height);
+  }
+
+  .header-content {
+    @apply flex items-center justify-between h-full;
+  }
+
+  /* Logo */
+  .logo {
+    @apply text-xl font-bold;
+    @apply bg-gradient-to-r from-blue-500 to-purple-600;
+    @apply bg-clip-text text-transparent;
+  }
+
+  /* Navigation */
+  .nav {
+    @apply flex space-x-6;
+  }
+
+  .nav-link {
+    @apply text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)];
+    @apply font-medium transition-colors duration-[var(--transition-fast)];
+    @apply cursor-pointer;
+  }
+
+  .nav-link-active {
+    @apply text-[var(--color-text-primary)] border-b-2 border-[var(--color-accent)];
+  }
+
+  /* Buttons */
+  .btn {
+    @apply px-4 py-2 rounded-[var(--radius-md)];
+    @apply font-medium transition-all duration-[var(--transition-fast)];
+    @apply cursor-pointer inline-flex items-center justify-center;
+    @apply disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply btn;
+    @apply bg-gradient-to-r from-purple-600 to-purple-800;
+    @apply hover:from-purple-700 hover:to-purple-900;
+    @apply text-white font-semibold;
+    @apply transform hover:scale-105;
+  }
+
+  .btn-secondary {
+    @apply btn;
+    @apply bg-[var(--color-bg-secondary)] hover:bg-[var(--color-bg-tertiary)];
+    @apply text-purple-600 dark:text-purple-400;
+    @apply border-2 border-purple-600 dark:border-purple-400;
+    @apply font-semibold;
+  }
+
+  .btn-icon {
+    @apply p-2 rounded-[var(--radius-md)];
+    @apply hover:bg-[var(--color-bg-tertiary)];
+    @apply transition-colors duration-[var(--transition-fast)];
+    @apply cursor-pointer flex items-center justify-center;
+  }
+
+  /* Cards */
+  .card {
+    @apply rounded-[var(--radius-lg)];
+    @apply border border-[var(--color-border)];
+    @apply p-6 shadow-[var(--shadow-sm)];
+    @apply bg-white/50 dark:bg-gray-800/50;
+  }
+
+  .card-header {
+    @apply mb-4 pb-4 border-b border-[var(--color-border)];
+  }
+
+  .card-title {
+    @apply text-xl font-bold text-[var(--color-text-primary)];
+  }
+
+  .card-body {
+    @apply text-[var(--color-text-secondary)];
+  }
+
+  /* Sections */
+  .section {
+    @apply py-12;
+  }
+
+  .section-header {
+    @apply mb-8 text-center;
+  }
+
+  .section-title {
+    @apply text-3xl font-bold mb-4 text-[var(--color-text-primary)];
+  }
+
+  .section-description {
+    @apply text-lg text-[var(--color-text-secondary)] max-w-2xl mx-auto;
+  }
+
+  /* Page Container */
+  .page {
+    @apply min-h-screen;
+    @apply pt-[var(--header-height)];
+    background: transparent;
+  }
+
+  .page-content {
+    @apply container-main py-8;
+    background: transparent;
+  }
+
+  /* Footer */
+  .footer {
+    @apply bg-[var(--color-bg-secondary)] border-t border-[var(--color-border)];
+    @apply py-8 mt-auto;
+  }
+
+  .footer-content {
+    @apply text-center text-[var(--color-text-secondary)];
+  }
+
+  /* Demo Placeholder */
+  .demo-placeholder {
+    @apply card text-center py-24;
+  }
+
+  .demo-placeholder-text {
+    @apply text-2xl font-bold text-[var(--color-text-primary)] mb-2;
+  }
+
+  .demo-placeholder-desc {
+    @apply text-[var(--color-text-secondary)];
+  }
+
+  /* Utility Classes */
+  .text-primary {
+    @apply text-[var(--color-text-primary)];
+  }
+
+  .text-secondary {
+    @apply text-[var(--color-text-secondary)];
+  }
+
+  .text-accent {
+    @apply text-[var(--color-accent)];
+  }
+
+  .bg-primary {
+    @apply bg-[var(--color-bg-primary)];
+  }
+
+  .bg-secondary {
+    @apply bg-[var(--color-bg-secondary)];
+  }
+
+  .border-color {
+    @apply border-[var(--color-border)];
+  }
+}
+
+/* Alpine.js utilities */
+[x-cloak] {
+  @apply hidden;
+}
+
+.page-transition {
+  animation: fadeIn 200ms ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Particles background */
+#particles {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  background-color: #f9fafb; /* Light mode bg */
+}
+
+.dark #particles {
+  background-color: #111827; /* Dark mode bg */
+}
+
+.content-wrapper {
+  position: relative;
+  z-index: 1;
+}
+
+/* Demo Page Layout */
+.demo-layout {
+  @apply flex flex-col lg:flex-row;
+  /* Full viewport positioning - no gaps */
+  position: absolute;
+  top: var(--header-height);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+}
+
+/* Controls Panel */
+.demo-controls {
+  @apply fixed bottom-0 left-0 right-0 z-40;
+  @apply lg:relative lg:w-[30%];
+  @apply overflow-y-auto;
+  @apply transform transition-transform duration-300 ease-in-out;
+  @apply border-r-0 lg:border-r border-[var(--color-border)];
+  @apply bg-white/30 dark:bg-gray-800/30;
+  max-height: 80vh;
+}
+
+@media (min-width: 1024px) {
+  .demo-controls {
+    max-height: 100vh;
+  }
+}
+
+.demo-controls.mobile-hidden {
+  @apply translate-y-full lg:translate-y-0;
+}
+
+.demo-controls.mobile-visible {
+  @apply translate-y-0;
+}
+
+/* Graph Container */
+.demo-graph {
+  @apply flex-1 relative;
+  @apply lg:w-[70%];
+  @apply bg-white/95 dark:bg-gray-900/95;
+  @apply overflow-hidden;
+  height: 100%;
+}
+
+/* Mobile Toggle Button */
+.demo-controls-toggle {
+  @apply fixed bottom-4 right-4 z-50;
+  @apply lg:hidden;
+  @apply btn-primary;
+  @apply shadow-lg;
+  @apply w-14 h-14 rounded-full;
+  @apply flex items-center justify-center;
+}
+
+/* Loading Overlay */
+.demo-loading {
+  @apply absolute inset-0 flex items-center justify-center;
+  @apply backdrop-blur-sm z-50;
+  background-color: var(--color-bg-secondary);
+  opacity: 0.9;
+}
+
+.demo-loading-spinner {
+  @apply inline-block animate-spin rounded-full;
+  @apply h-16 w-16 border-4 border-purple-600 border-t-transparent;
+}
+
+/* Controls Content */
+.demo-controls-content {
+  @apply p-6 space-y-6;
+}
+
+.demo-controls-header {
+  @apply mb-4;
+}
+
+.demo-controls-title {
+  @apply text-2xl font-bold text-primary mb-2;
+}
+
+.demo-controls-description {
+  @apply text-secondary;
+}
+
+.demo-controls-section {
+  @apply space-y-3;
+}
+
+.demo-controls-section-title {
+  @apply text-lg font-semibold text-primary mb-3;
+}
+
+/* Info Box Variants */
+.info-box {
+  @apply rounded-lg p-4;
+}
+
+.info-box-blue {
+  @apply info-box bg-blue-50 dark:bg-blue-900/30;
+}
+
+.info-box-yellow {
+  @apply info-box bg-yellow-50/30 dark:bg-yellow-900/30;
+}
+
+.info-box-purple {
+  @apply info-box bg-purple-50 dark:bg-purple-900/30;
+}
+
+.info-box-green {
+  @apply info-box bg-green-50 dark:bg-green-900/30;
+}
