@@ -175,6 +175,74 @@
         </div>
       </div>
 
+      <!-- Network Analysis Section -->
+      <div class="demo-controls-section border-t border-[var(--color-border)] pt-4">
+        <h2 class="demo-controls-section-title">⚡ Network Analysis (Node Sizes)</h2>
+
+        <div class="bg-[var(--color-bg-secondary)] rounded-md p-4 space-y-2 mb-3">
+          <h3 class="text-sm font-semibold text-primary">
+            Metrics to Calculate
+          </h3>
+          <div class="space-y-2">
+            <label class="flex items-center gap-2 text-sm">
+              <input type="checkbox" v-model="selectedFeatures" value="degree" class="rounded">
+              <span class="text-secondary">Degree Centrality</span>
+            </label>
+            <label class="flex items-center gap-2 text-sm">
+              <input type="checkbox" v-model="selectedFeatures" value="betweenness" class="rounded">
+              <span class="text-secondary">Betweenness Centrality</span>
+            </label>
+            <label class="flex items-center gap-2 text-sm">
+              <input type="checkbox" v-model="selectedFeatures" value="clustering" class="rounded">
+              <span class="text-secondary">Clustering Coefficient</span>
+            </label>
+            <label class="flex items-center gap-2 text-sm">
+              <input type="checkbox" v-model="selectedFeatures" value="eigenvector" class="rounded">
+              <span class="text-secondary">Eigenvector Centrality</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="space-y-2 mb-3">
+          <label class="block text-sm font-medium text-secondary">
+            Node Size Based On:
+          </label>
+          <select
+            v-model="selectedSizeMetric"
+            :disabled="selectedFeatures.length === 0"
+            class="w-full bg-secondary text-primary border border-color px-3 py-2 rounded-md disabled:opacity-50"
+          >
+            <option value="">-- Select a metric --</option>
+            <option v-if="selectedFeatures.includes('degree')" value="degree">Degree</option>
+            <option v-if="selectedFeatures.includes('betweenness')" value="betweenness">Betweenness</option>
+            <option v-if="selectedFeatures.includes('clustering')" value="clustering">Clustering</option>
+            <option v-if="selectedFeatures.includes('eigenvector')" value="eigenvector">Eigenvector</option>
+          </select>
+        </div>
+
+        <button
+          @click="handleAnalyzeGraph"
+          :disabled="analyzing || selectedFeatures.length === 0"
+          class="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white px-4 py-3 rounded-md font-semibold transition-colors"
+        >
+          <span v-if="!analyzing">⚡ Analyze Network</span>
+          <span v-else>⏳ Analyzing...</span>
+        </button>
+
+        <!-- Progress Bar -->
+        <div v-if="analyzing" class="mt-2">
+          <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+            <div
+              class="bg-purple-600 h-2 rounded-full transition-all duration-300"
+              :style="{ width: `${analysisProgress * 100}%` }"
+            ></div>
+          </div>
+          <p class="text-xs text-secondary mt-1 text-center">
+            {{ Math.round(analysisProgress * 100) }}%
+          </p>
+        </div>
+      </div>
+
       <!-- Legend -->
       <div class="demo-controls-section border-t border-[var(--color-border)] pt-4">
         <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
@@ -182,7 +250,7 @@
         </h3>
         <div class="space-y-2 text-sm">
           <div class="flex items-center gap-2">
-            <div class="w-4 h-4 rounded-full bg-purple-600"></div>
+            <div class="w-4 h-4 rounded-full bg-indigo-500"></div>
             <span class="text-gray-700 dark:text-gray-300">You</span>
           </div>
           <div class="flex items-center gap-2">
@@ -276,6 +344,7 @@
           <li>💾 <strong>Auto-saves</strong> every 30 seconds</li>
           <li>🔒 <strong>Lock</strong> to freeze positions</li>
           <li>📸 <strong>Download</strong> as PNG image</li>
+          <li>⚡ <strong>Analyze</strong> to size nodes by centrality metrics</li>
           <li>🎯 <strong>Apply layouts</strong> to visualize your tree differently</li>
           <li>↩️ <strong>Undo/Redo</strong> with buttons or Ctrl+Z / Ctrl+Y (up to 10 actions)</li>
         </ul>
@@ -323,7 +392,7 @@ const graphComposable = useNetworkGraph({
   colorBy: 'group',
   colorScheme: 'categorical',
   showLabels: true,
-  autoComputeCentrality: true, // Auto-size by eigenvector (uses sqrt scale for balanced sizing)
+  autoComputeCentrality: false, // Manual sizing - users choose metric via Analyze button
   customColorFunction: (node) => {
     const group = node.group || 0;
     return GROUP_COLORS[group] || null; // Return null to use default if not found
@@ -342,7 +411,9 @@ const {
   unlockPositions,
   saveAsPNG,
   applyLayout,
-  getAvailableLayouts
+  getAvailableLayouts,
+  analyzeGraph,
+  analysisProgress
 } = graphComposable;
 
 // Local state
@@ -358,6 +429,9 @@ const availableLayouts = ref([]);
 const applyingLayout = ref(false);
 const canUndo = ref(false);
 const canRedo = ref(false);
+const selectedFeatures = ref(['eigenvector']); // Default to eigenvector
+const selectedSizeMetric = ref('eigenvector');
+const analyzing = ref(false);
 
 // Controller instance
 let controller = null;
@@ -617,6 +691,39 @@ const handleRedo = () => {
     handleStatusChange(result.message || 'Nothing to redo', 'error');
   }
   updateUndoRedoStates();
+};
+
+/**
+ * Handle analyze graph
+ */
+const handleAnalyzeGraph = async () => {
+  if (!analyzeGraph || selectedFeatures.value.length === 0) return;
+
+  try {
+    analyzing.value = true;
+    handleStatusChange('Analyzing network...', 'info');
+
+    const result = await analyzeGraph(selectedFeatures.value, {
+      includeGraphStats: false // Don't need graph-level stats for family tree
+    });
+
+    if (result) {
+      // Update visual encoding to size by selected metric
+      const sizeByMetric = selectedSizeMetric.value || selectedFeatures.value[0];
+      if (graphInstance.value?.updateVisualEncoding) {
+        graphInstance.value.updateVisualEncoding({
+          sizeBy: sizeByMetric,
+          preserveZoom: true
+        });
+      }
+      handleStatusChange(`✅ Analysis complete - sizing by ${sizeByMetric}`, 'success');
+    }
+  } catch (err) {
+    console.error('Analysis error:', err);
+    handleStatusChange(`Analysis failed: ${err.message}`, 'error');
+  } finally {
+    analyzing.value = false;
+  }
 };
 
 /**

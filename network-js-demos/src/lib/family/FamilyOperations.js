@@ -72,44 +72,52 @@ export class FamilyOperations {
   }
 
   /**
-   * Set relationship property on a node and ensure it's on the correct object reference
+   * Set a property on a node and ensure it's on the correct object reference
    * @private
    */
-  _setRelationshipOnNode(newNode, relationship, graphInstance) {
+  _setNodeProperty(newNode, propertyName, propertyValue, graphInstance) {
     if (!newNode) return;
-    
-    // Set relationship property immediately on the returned node
-    newNode.relationship = relationship;
-    
+
+    // Set property immediately on the returned node
+    newNode[propertyName] = propertyValue;
+
     // Also ensure it's set on the node in the graph instance data array
     // This is the actual object D3 uses for rendering and event handlers
     if (graphInstance?.data) {
       // Find the node in the data array - this is what D3 event handlers read from
       let nodeInData = graphInstance.data.nodes.find(n => n.id === newNode.id);
-      
+
       if (nodeInData) {
         // Set on the node in the array (this is what D3 event handlers read from)
-        nodeInData.relationship = relationship;
-        
+        nodeInData[propertyName] = propertyValue;
+
         // They should be the same reference, but if not, sync both
         if (nodeInData !== newNode) {
-          newNode.relationship = relationship;
+          newNode[propertyName] = propertyValue;
         }
       } else {
-        // Node not found in array yet - might be a timing issue
-        // Wait a microtask and try again
-        Promise.resolve().then(() => {
+        // Node not in array yet - use requestAnimationFrame to set it after rendering
+        requestAnimationFrame(() => {
           if (graphInstance?.data) {
-            nodeInData = graphInstance.data.nodes.find(n => n.id === newNode.id);
+            const nodeInData = graphInstance.data.nodes.find(n => n.id === newNode.id);
             if (nodeInData) {
-              nodeInData.relationship = relationship;
+              nodeInData[propertyName] = propertyValue;
             }
           }
         });
       }
-      
-      // Also use requestAnimationFrame as a fallback to ensure it's set after D3 renders
-      requestAnimationFrame(() => {
+    }
+  }
+
+  /**
+   * Set relationship property on a node and ensure it's on the correct object reference
+   * @private
+   */
+  _setRelationshipOnNode(newNode, relationship, graphInstance) {
+    this._setNodeProperty(newNode, 'relationship', relationship, graphInstance);
+
+    // Also use requestAnimationFrame as a fallback to ensure it's set after D3 renders
+    requestAnimationFrame(() => {
         if (graphInstance?.data) {
           const nodeInData = graphInstance.data.nodes.find(n => n.id === newNode.id);
           if (nodeInData && !nodeInData.relationship) {
@@ -117,7 +125,6 @@ export class FamilyOperations {
           }
         }
       });
-    }
   }
 
   /**
@@ -589,18 +596,26 @@ export class FamilyOperations {
       }
     }
 
-    // Add partner node with partnerOf property to track the relationship
+    // Add partner node
     const partnerNode = this.addNodeWithRelationship([personId], partnerName.trim(), FAMILY_GROUPS.PARTNER, null, customRelationship);
 
-    // Set partnerOf property to identify who this partner belongs to
-    if (partnerNode && graphInstance?.data) {
-      const addedNode = graphInstance.data.nodes.find(n => n.id === (partnerNode.id || partnerName.trim()));
-      if (addedNode) {
-        addedNode.partnerOf = personId;
-      }
+    // Set partnerOf property - handle both sync and async cases
+    const setPartnerOf = (node) => {
+      this._setNodeProperty(node, 'partnerOf', personId, graphInstance);
+      this.saveFamily();
+    };
+
+    // Check if addNodeWithRelationship returned a Promise
+    if (partnerNode && typeof partnerNode.then === 'function') {
+      // Async case - wait for node to be added
+      partnerNode.then(node => {
+        setPartnerOf(node);
+      });
+    } else {
+      // Sync case - set immediately
+      setPartnerOf(partnerNode);
     }
 
-    this.saveFamily();
     return { success: true };
   }
 }

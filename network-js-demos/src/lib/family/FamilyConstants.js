@@ -17,11 +17,11 @@ export const FAMILY_GROUPS = {
  * Group color mapping
  */
 export const GROUP_COLORS = {
-  [FAMILY_GROUPS.YOU]: '#9333ea',           // Purple
+  [FAMILY_GROUPS.YOU]: '#6366f1',           // Indigo
   [FAMILY_GROUPS.PARENT]: '#ec4899',        // Pink
   [FAMILY_GROUPS.SIBLING]: '#3b82f6',       // Blue
   [FAMILY_GROUPS.UNCLE_AUNT]: '#f97316',    // Orange
-  [FAMILY_GROUPS.COUSIN]: '#a855f7',        // Purple light
+  [FAMILY_GROUPS.COUSIN]: '#a855f7',        // Purple
   [FAMILY_GROUPS.GRANDPARENT]: '#b45309',   // Amber dark
   [FAMILY_GROUPS.NIECE_NEPHEW]: '#06b6d4',  // Cyan
   [FAMILY_GROUPS.CHILD]: '#14b8a6',         // Teal
