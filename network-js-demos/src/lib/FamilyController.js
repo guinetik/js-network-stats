@@ -13,6 +13,8 @@ import { FamilyValidation } from './family/FamilyValidation.js';
 import { FamilyOperations } from './family/FamilyOperations.js';
 import { FamilyStorage } from './family/FamilyStorage.js';
 import { FamilyDialogService, DIALOG_ACTIONS } from './family/FamilyDialogService.js';
+import { GraphMemento } from './family/memento/GraphMemento.js';
+import { MementoHistory } from './family/memento/MementoHistory.js';
 
 // Re-export constants for backward compatibility
 export { FAMILY_GROUPS, GROUP_COLORS, DIALOG_ACTIONS };
@@ -51,6 +53,9 @@ export class FamilyController {
       () => this.storage.saveFamily()
     );
     this.dialogService = new FamilyDialogService(getGraphInstance, this.validation);
+
+    // Initialize undo/redo history (max 10 snapshots)
+    this.mementoHistory = new MementoHistory({ maxHistorySize: 10 });
 
     // Setup auto-save
     this.storage.startAutoSave();
@@ -347,6 +352,123 @@ export class FamilyController {
     if (this.onStatusChange) {
       this.onStatusChange(message, type);
     }
+  }
+
+  /**
+   * Save current graph state as a memento before performing an operation
+   * Call this BEFORE any operation that modifies the graph
+   *
+   * @param {string} description - Description of the state (e.g., "Before adding parent")
+   */
+  saveStateBeforeOperation(description) {
+    const graphInstance = this.getGraphInstance();
+    if (!graphInstance || !graphInstance.data) {
+      this.log.warn('Cannot save state: graph not available');
+      return;
+    }
+
+    const memento = new GraphMemento(
+      graphInstance.data.nodes,
+      graphInstance.data.links,
+      description
+    );
+
+    this.mementoHistory.saveState(memento);
+    this.log.debug('State saved', { description, summary: memento.getSummary() });
+  }
+
+  /**
+   * Undo the last operation
+   * Restores graph to previous state
+   *
+   * @returns {Object} {success: boolean, message?: string}
+   */
+  undo() {
+    if (!this.mementoHistory.canUndo()) {
+      return { success: false, message: 'Nothing to undo' };
+    }
+
+    const memento = this.mementoHistory.undo();
+    if (!memento) {
+      return { success: false, message: 'Failed to undo' };
+    }
+
+    // Restore graph state
+    const graphInstance = this.getGraphInstance();
+    if (!graphInstance) {
+      return { success: false, message: 'Graph not available' };
+    }
+
+    const nodes = memento.getNodes();
+    const links = memento.getLinks();
+
+    // Load the restored state
+    this.graphManager.loadData(nodes, links);
+
+    const message = `Undid: ${memento.getDescription()}`;
+    this.log.info('Undo successful', { description: memento.getDescription() });
+    this.showStatus(message, 'info');
+
+    return { success: true, message };
+  }
+
+  /**
+   * Redo the last undone operation
+   * Restores graph to next state
+   *
+   * @returns {Object} {success: boolean, message?: string}
+   */
+  redo() {
+    if (!this.mementoHistory.canRedo()) {
+      return { success: false, message: 'Nothing to redo' };
+    }
+
+    const memento = this.mementoHistory.redo();
+    if (!memento) {
+      return { success: false, message: 'Failed to redo' };
+    }
+
+    // Restore graph state
+    const graphInstance = this.getGraphInstance();
+    if (!graphInstance) {
+      return { success: false, message: 'Graph not available' };
+    }
+
+    const nodes = memento.getNodes();
+    const links = memento.getLinks();
+
+    // Load the restored state
+    this.graphManager.loadData(nodes, links);
+
+    const message = `Redid: ${memento.getDescription()}`;
+    this.log.info('Redo successful', { description: memento.getDescription() });
+    this.showStatus(message, 'info');
+
+    return { success: true, message };
+  }
+
+  /**
+   * Check if undo is available
+   * @returns {boolean} True if there are states to undo
+   */
+  canUndo() {
+    return this.mementoHistory.canUndo();
+  }
+
+  /**
+   * Check if redo is available
+   * @returns {boolean} True if there are states to redo
+   */
+  canRedo() {
+    return this.mementoHistory.canRedo();
+  }
+
+  /**
+   * Get undo/redo history summary
+   * @returns {Object} History summary with counts and descriptions
+   */
+  getHistorySummary() {
+    return this.mementoHistory.getHistorySummary();
   }
 
   /**

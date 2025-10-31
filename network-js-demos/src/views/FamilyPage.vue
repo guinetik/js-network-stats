@@ -151,6 +151,22 @@
           </button>
 
           <button
+            @click="handleUndo"
+            :disabled="!canUndo"
+            class="bg-violet-600 hover:bg-violet-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-3 py-2 rounded-lg font-semibold transition-colors shadow-sm text-sm"
+          >
+            ↩️ Undo
+          </button>
+
+          <button
+            @click="handleRedo"
+            :disabled="!canRedo"
+            class="bg-fuchsia-600 hover:bg-fuchsia-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-3 py-2 rounded-lg font-semibold transition-colors shadow-sm text-sm"
+          >
+            ↪️ Redo
+          </button>
+
+          <button
             @click="handleResetTree"
             class="col-span-2 bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg font-semibold transition-colors shadow-sm text-sm"
           >
@@ -261,6 +277,7 @@
           <li>🔒 <strong>Lock</strong> to freeze positions</li>
           <li>📸 <strong>Download</strong> as PNG image</li>
           <li>🎯 <strong>Apply layouts</strong> to visualize your tree differently</li>
+          <li>↩️ <strong>Undo/Redo</strong> with buttons or Ctrl+Z / Ctrl+Y (up to 10 actions)</li>
         </ul>
       </div>
     </template>
@@ -306,6 +323,7 @@ const graphComposable = useNetworkGraph({
   colorBy: 'group',
   colorScheme: 'categorical',
   showLabels: true,
+  autoComputeCentrality: true, // Auto-size by eigenvector (uses sqrt scale for balanced sizing)
   customColorFunction: (node) => {
     const group = node.group || 0;
     return GROUP_COLORS[group] || null; // Return null to use default if not found
@@ -338,6 +356,8 @@ const dialogAction = ref(null); // Store which action to perform on confirm
 const selectedLayout = ref('none');
 const availableLayouts = ref([]);
 const applyingLayout = ref(false);
+const canUndo = ref(false);
+const canRedo = ref(false);
 
 // Controller instance
 let controller = null;
@@ -351,6 +371,35 @@ const handleStatusChange = (message, type) => {
   statusMessage.value = message;
   statusType.value = type;
   // Status messages persist - user can dismiss by taking new action
+};
+
+/**
+ * Update undo/redo button states
+ */
+const updateUndoRedoStates = () => {
+  if (!controller) return;
+  canUndo.value = controller.canUndo();
+  canRedo.value = controller.canRedo();
+};
+
+/**
+ * Handle keyboard shortcuts
+ * @param {KeyboardEvent} event - Keyboard event
+ */
+const handleKeyboardShortcut = (event) => {
+  // Check for Ctrl+Z (undo) or Cmd+Z on Mac
+  if ((event.ctrlKey || event.metaKey) && event.key === 'z' && !event.shiftKey) {
+    event.preventDefault();
+    handleUndo();
+  }
+  // Check for Ctrl+Y (redo) or Ctrl+Shift+Z or Cmd+Shift+Z on Mac
+  else if (
+    ((event.ctrlKey || event.metaKey) && event.key === 'y') ||
+    ((event.ctrlKey || event.metaKey) && event.shiftKey && event.key === 'z')
+  ) {
+    event.preventDefault();
+    handleRedo();
+  }
 };
 
 /**
@@ -471,6 +520,9 @@ const handleDialogConfirm = (values) => {
 
   dialogVisible.value = false;
 
+  // Save state before operation (using dialog title as description)
+  controller.saveStateBeforeOperation(dialogTitle.value);
+
   const dialogService = controller.getDialogService();
   const result = dialogService.executeAction(dialogAction.value, values, controller.getOperations());
 
@@ -479,6 +531,8 @@ const handleDialogConfirm = (values) => {
       handleStatusChange(result.message, 'info');
     }
     // Color updates happen automatically in addNodeIncremental() via computeScales()
+    // Update undo/redo states after successful operation
+    updateUndoRedoStates();
   } else {
     handleStatusChange(result.message || 'Failed to add relative', 'error');
   }
@@ -533,7 +587,36 @@ const handleResetTree = () => {
   if (!controller) return;
   if (confirm('Are you sure you want to reset your family tree?')) {
     controller.resetFamily();
+    updateUndoRedoStates();
   }
+};
+
+/**
+ * Handle undo
+ */
+const handleUndo = () => {
+  if (!controller) return;
+  const result = controller.undo();
+  if (result.success) {
+    handleStatusChange(result.message, 'info');
+  } else {
+    handleStatusChange(result.message || 'Nothing to undo', 'error');
+  }
+  updateUndoRedoStates();
+};
+
+/**
+ * Handle redo
+ */
+const handleRedo = () => {
+  if (!controller) return;
+  const result = controller.redo();
+  if (result.success) {
+    handleStatusChange(result.message, 'info');
+  } else {
+    handleStatusChange(result.message || 'Nothing to redo', 'error');
+  }
+  updateUndoRedoStates();
 };
 
 /**
@@ -563,11 +646,18 @@ const handleApplyLayout = async () => {
 watch(graphInstance, (newInstance) => {
   if (newInstance && !controller) {
     initializeFamily();
+    updateUndoRedoStates();
   }
 }, { immediate: true });
 
+// Add keyboard shortcuts on mount
+onMounted(() => {
+  window.addEventListener('keydown', handleKeyboardShortcut);
+});
+
 // Cleanup on unmount
 onUnmounted(() => {
+  window.removeEventListener('keydown', handleKeyboardShortcut);
   if (controller) {
     controller.dispose();
   }

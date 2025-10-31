@@ -366,8 +366,9 @@ export class NetworkGraphD3 {
         const min = Math.min(...values);
         const max = Math.max(...values);
 
-        // Linear scale from data domain to radius range
-        this.sizeScale = d3.scaleLinear()
+        // Square root scale for more balanced size differences
+        // This prevents leaf nodes from being too tiny compared to central nodes
+        this.sizeScale = d3.scaleSqrt()
           .domain([min, max])
           .range([this.options.minRadius, this.options.maxRadius])
           .clamp(true);

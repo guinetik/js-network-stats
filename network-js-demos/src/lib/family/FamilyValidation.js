@@ -113,22 +113,11 @@ export class FamilyValidation {
       return false;
     }
 
-    const links = graphInstance.data.links;
-    const partners = links
-      .filter(link => {
-        const sourceId = normalizeLinkId(link.source);
-        const targetId = normalizeLinkId(link.target);
-        return sourceId === personId || targetId === personId;
-      })
-      .map(link => {
-        const sourceId = normalizeLinkId(link.source);
-        const targetId = normalizeLinkId(link.target);
-        return sourceId === personId ? targetId : sourceId;
-      })
-      .map(partnerId => {
-        return graphInstance.data.nodes.find(n => n.id === partnerId);
-      })
-      .filter(node => node && node.group === FAMILY_GROUPS.PARTNER);
+    // Check if there's a PARTNER node with partnerOf property set to this person
+    // This avoids false positives where children/cousins are connected to their parent's partner
+    const partners = graphInstance.data.nodes.filter(node =>
+      node.group === FAMILY_GROUPS.PARTNER && node.partnerOf === personId
+    );
 
     return partners.length > 0;
   }

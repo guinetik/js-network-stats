@@ -366,14 +366,55 @@ export class FamilyOperations {
       .filter(node => node && node.group === FAMILY_GROUPS.GRANDPARENT)
       .map(node => node.id);
 
-    // Connect to parent (sibling relationship) AND grandparents (parent-child relationship)
-    const connectToIds = [parentId, ...grandparentIds];
+    // Find ALL existing uncles/aunts who share the same grandparents (they are siblings)
+    // These are the parent's siblings
+    const existingUnclesAunts = [];
+    if (grandparentIds.length > 0) {
+      // Find all nodes that are children of these grandparents
+      const childrenOfGrandparents = links
+        .filter(link => {
+          const sourceId = normalizeLinkId(link.source);
+          return grandparentIds.includes(sourceId);
+        })
+        .map(link => {
+          const targetId = normalizeLinkId(link.target);
+          return graphInstance.data.nodes.find(n => n.id === targetId);
+        })
+        .filter(node => node && (node.group === FAMILY_GROUPS.PARENT || node.group === FAMILY_GROUPS.UNCLE_AUNT))
+        .map(node => node.id);
 
-    // Add the uncle/aunt node - connected to parent and grandparents
+      existingUnclesAunts.push(...childrenOfGrandparents);
+    } else {
+      // If no grandparents, just connect to the parent as a sibling
+      existingUnclesAunts.push(parentId);
+    }
+
+    // Remove duplicates
+    const uniqueUnclesAunts = [...new Set(existingUnclesAunts)];
+
+    // Combine: connect to grandparents (if any) AND to all existing uncles/aunts (including the parent)
+    const connectToIds = [...grandparentIds, ...uniqueUnclesAunts];
+
+    // Add the uncle/aunt node - connected to grandparents and all siblings
     const newUncleAunt = this.addNodeWithRelationship(connectToIds, name.trim(), FAMILY_GROUPS.UNCLE_AUNT);
 
     if (!newUncleAunt) {
       return { success: false, message: 'Failed to add uncle/aunt' };
+    }
+
+    // Now ensure all existing uncles/aunts are connected to the new uncle/aunt
+    // (for explicit bidirectional links, similar to addSibling)
+    const newUncleAuntId = newUncleAunt.id || name.trim();
+
+    if (this.graphManager.addLink) {
+      uniqueUnclesAunts.forEach(siblingId => {
+        if (siblingId !== newUncleAuntId) {
+          // Use requestAnimationFrame to ensure node is fully added first
+          requestAnimationFrame(() => {
+            this.graphManager.addLink(newUncleAuntId, siblingId, true);
+          });
+        }
+      });
     }
 
     this.saveFamily();
@@ -402,27 +443,15 @@ export class FamilyOperations {
     }
 
     // Find partner of the uncle/aunt (if any) - cousins should connect to both parents
-    const links = graphInstance.data.links;
-    const partnerId = links
-      .filter(link => {
-        const sourceId = normalizeLinkId(link.source);
-        const targetId = normalizeLinkId(link.target);
-        return (sourceId === uncleAuntId || targetId === uncleAuntId);
-      })
-      .map(link => {
-        const sourceId = normalizeLinkId(link.source);
-        const targetId = normalizeLinkId(link.target);
-        return sourceId === uncleAuntId ? targetId : sourceId;
-      })
-      .map(partnerId => {
-        return graphInstance.data.nodes.find(n => n.id === partnerId);
-      })
-      .find(node => node && node.group === FAMILY_GROUPS.PARTNER);
+    // Use partnerOf property to get the correct partner
+    const partner = graphInstance.data.nodes.find(node =>
+      node.group === FAMILY_GROUPS.PARTNER && node.partnerOf === uncleAuntId
+    );
 
     // Connect to uncle/aunt AND partner (if partner exists)
     const connectToIds = [uncleAuntId];
-    if (partnerId) {
-      connectToIds.push(partnerId.id);
+    if (partner) {
+      connectToIds.push(partner.id);
     }
 
     this.addNodeWithRelationship(connectToIds, name.trim(), FAMILY_GROUPS.COUSIN);
@@ -469,27 +498,15 @@ export class FamilyOperations {
     }
 
     // Find partner of the parent (if any) - children should connect to both parents
-    const links = graphInstance.data.links;
-    const partnerId = links
-      .filter(link => {
-        const sourceId = normalizeLinkId(link.source);
-        const targetId = normalizeLinkId(link.target);
-        return (sourceId === parentId || targetId === parentId);
-      })
-      .map(link => {
-        const sourceId = normalizeLinkId(link.source);
-        const targetId = normalizeLinkId(link.target);
-        return sourceId === parentId ? targetId : sourceId;
-      })
-      .map(partnerId => {
-        return graphInstance.data.nodes.find(n => n.id === partnerId);
-      })
-      .find(node => node && node.group === FAMILY_GROUPS.PARTNER);
+    // Use partnerOf property to avoid finding parent's parent's partner
+    const partner = graphInstance.data.nodes.find(node =>
+      node.group === FAMILY_GROUPS.PARTNER && node.partnerOf === parentId
+    );
 
     // Connect to parent AND partner (if partner exists)
     const connectToIds = [parentId];
-    if (partnerId) {
-      connectToIds.push(partnerId.id);
+    if (partner) {
+      connectToIds.push(partner.id);
     }
 
     this.addNodeWithRelationship(connectToIds, name.trim(), childGroup);
@@ -519,27 +536,15 @@ export class FamilyOperations {
     }
 
     // Find partner of the sibling (if any) - nieces/nephews should connect to both parents
-    const links = graphInstance.data.links;
-    const partnerId = links
-      .filter(link => {
-        const sourceId = normalizeLinkId(link.source);
-        const targetId = normalizeLinkId(link.target);
-        return (sourceId === siblingId || targetId === siblingId);
-      })
-      .map(link => {
-        const sourceId = normalizeLinkId(link.source);
-        const targetId = normalizeLinkId(link.target);
-        return sourceId === siblingId ? targetId : sourceId;
-      })
-      .map(partnerId => {
-        return graphInstance.data.nodes.find(n => n.id === partnerId);
-      })
-      .find(node => node && node.group === FAMILY_GROUPS.PARTNER);
+    // Use partnerOf property to get the correct partner
+    const partner = graphInstance.data.nodes.find(node =>
+      node.group === FAMILY_GROUPS.PARTNER && node.partnerOf === siblingId
+    );
 
     // Connect to sibling AND partner (if partner exists)
     const connectToIds = [siblingId];
-    if (partnerId) {
-      connectToIds.push(partnerId.id);
+    if (partner) {
+      connectToIds.push(partner.id);
     }
 
     this.addNodeWithRelationship(connectToIds, name.trim(), FAMILY_GROUPS.NIECE_NEPHEW);
@@ -584,7 +589,17 @@ export class FamilyOperations {
       }
     }
 
-    this.addNodeWithRelationship([personId], partnerName.trim(), FAMILY_GROUPS.PARTNER, null, customRelationship);
+    // Add partner node with partnerOf property to track the relationship
+    const partnerNode = this.addNodeWithRelationship([personId], partnerName.trim(), FAMILY_GROUPS.PARTNER, null, customRelationship);
+
+    // Set partnerOf property to identify who this partner belongs to
+    if (partnerNode && graphInstance?.data) {
+      const addedNode = graphInstance.data.nodes.find(n => n.id === (partnerNode.id || partnerName.trim()));
+      if (addedNode) {
+        addedNode.partnerOf = personId;
+      }
+    }
+
     this.saveFamily();
     return { success: true };
   }
