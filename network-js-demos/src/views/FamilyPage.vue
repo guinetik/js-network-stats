@@ -299,7 +299,7 @@ import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import DemoLayout from '../components/DemoLayout.vue';
 import DialogForm from '../components/DialogForm.vue';
 import { useNetworkGraph } from '../composables/useNetworkGraph';
-import { FamilyController, FAMILY_GROUPS, GROUP_COLORS } from '../lib/FamilyController';
+import { FamilyController, FAMILY_GROUPS, GROUP_COLORS, DIALOG_ACTIONS } from '../lib/FamilyController';
 
 // Use the network graph composable with custom color function for family groups
 const graphComposable = useNetworkGraph({
@@ -350,9 +350,7 @@ let controller = null;
 const handleStatusChange = (message, type) => {
   statusMessage.value = message;
   statusType.value = type;
-  /* setTimeout(() => {
-    statusMessage.value = '';
-  }, type === 'error' ? 5000 : 3000); */
+  // Status messages persist - user can dismiss by taking new action
 };
 
 /**
@@ -383,16 +381,6 @@ const initializeFamily = () => {
   // Get available layouts
   availableLayouts.value = controller.getAvailableLayouts();
 
-  // Custom color function is already set via options
-  // Just ensure visual encoding is updated
-  if (graphInstance.value) {
-    graphInstance.value.updateVisualEncoding({
-      colorBy: 'group',
-      colorScheme: 'categorical',
-      preserveZoom: true
-    });
-  }
-
   // Load saved data or initial data
   const savedData = controller.loadFamily();
   if (savedData) {
@@ -404,10 +392,11 @@ const initializeFamily = () => {
 };
 
 /**
- * Show dialog using dialog service
- * @param {Function} getDialogConfig - Function that returns dialog configuration
+ * Generic dialog handler for all family member additions
+ * @param {string} actionType - One of DIALOG_ACTIONS enum values
+ * @param {Function} getDialogConfig - Function that returns dialog configuration from service
  */
-const showDialog = async (getDialogConfig) => {
+const showDialogForAction = async (actionType, getDialogConfig) => {
   if (!controller) {
     handleStatusChange('Graph is still loading. Please wait...', 'error');
     return;
@@ -418,8 +407,9 @@ const showDialog = async (getDialogConfig) => {
 
   if (!config) {
     // Dialog service handles validation and returns null if preconditions not met
-    // Fallback error message (specific validation messages come from the service)
-    handleStatusChange('Unable to show dialog. Please check prerequisites.', 'error');
+    // Get appropriate validation message for this action type
+    const message = dialogService.getValidationMessage(actionType);
+    handleStatusChange(message, 'error');
     return;
   }
 
@@ -431,66 +421,46 @@ const showDialog = async (getDialogConfig) => {
   dialogVisible.value = true;
 };
 
-/**
- * Show dialog for adding parents
- */
-const handleAddParents = async () => {
-  const validation = controller?.canAddParents();
-  if (validation && !validation.canAdd) {
-    handleStatusChange(validation.message, 'error');
-    return;
-  }
-  await showDialog(() => controller?.getDialogService().getAddParentsDialog());
-};
+// Dialog handlers - all use the generic showDialogForAction method
+const handleAddParents = () => showDialogForAction(
+  DIALOG_ACTIONS.ADD_PARENTS,
+  () => controller?.getDialogService().getAddParentsDialog()
+);
 
-/**
- * Show dialog for adding sibling
- */
-const handleAddSibling = () => {
-  showDialog(() => controller?.getDialogService().getAddSiblingDialog());
-};
+const handleAddSibling = () => showDialogForAction(
+  DIALOG_ACTIONS.ADD_SIBLING,
+  () => controller?.getDialogService().getAddSiblingDialog()
+);
 
-/**
- * Show dialog for adding grandparents
- */
-const handleAddGrandparents = () => {
-  showDialog(() => controller?.getDialogService().getAddGrandparentsDialog());
-};
+const handleAddGrandparents = () => showDialogForAction(
+  DIALOG_ACTIONS.ADD_GRANDPARENTS,
+  () => controller?.getDialogService().getAddGrandparentsDialog()
+);
 
-/**
- * Show dialog for adding uncle/aunt
- */
-const handleAddUncleAunt = () => {
-  showDialog(() => controller?.getDialogService().getAddUncleAuntDialog());
-};
+const handleAddUncleAunt = () => showDialogForAction(
+  DIALOG_ACTIONS.ADD_UNCLE_AUNT,
+  () => controller?.getDialogService().getAddUncleAuntDialog()
+);
 
-/**
- * Show dialog for adding cousin
- */
-const handleAddCousin = () => {
-  showDialog(() => controller?.getDialogService().getAddCousinDialog());
-};
+const handleAddCousin = () => showDialogForAction(
+  DIALOG_ACTIONS.ADD_COUSIN,
+  () => controller?.getDialogService().getAddCousinDialog()
+);
 
-/**
- * Show dialog for adding child
- */
-const handleAddChild = () => {
-  showDialog(() => controller?.getDialogService().getAddChildDialog());
-};
+const handleAddChild = () => showDialogForAction(
+  DIALOG_ACTIONS.ADD_CHILD,
+  () => controller?.getDialogService().getAddChildDialog()
+);
 
-/**
- * Show dialog for adding niece/nephew
- */
-const handleAddNieceNephew = () => {
-  showDialog(() => controller?.getDialogService().getAddNieceNephewDialog());
-};
+const handleAddNieceNephew = () => showDialogForAction(
+  DIALOG_ACTIONS.ADD_NIECE_NEPHEW,
+  () => controller?.getDialogService().getAddNieceNephewDialog()
+);
 
-/**
- * Show dialog for adding partner
- */
-const handleAddPartner = () => {
-  showDialog(() => controller?.getDialogService().getAddPartnerDialog());
-};
+const handleAddPartner = () => showDialogForAction(
+  DIALOG_ACTIONS.ADD_PARTNER,
+  () => controller?.getDialogService().getAddPartnerDialog()
+);
 
 /**
  * Handle dialog confirm
@@ -508,14 +478,7 @@ const handleDialogConfirm = (values) => {
     if (result.message) {
       handleStatusChange(result.message, 'info');
     }
-    // Update color scale after adding node
-    if (graphInstance.value) {
-      graphInstance.value.updateVisualEncoding({
-        colorBy: 'group',
-        colorScheme: 'categorical',
-        preserveZoom: true
-      });
-    }
+    // Color updates happen automatically in addNodeIncremental() via computeScales()
   } else {
     handleStatusChange(result.message || 'Failed to add relative', 'error');
   }

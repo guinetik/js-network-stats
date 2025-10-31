@@ -9,6 +9,21 @@
 import { FAMILY_GROUPS } from './FamilyConstants.js';
 
 /**
+ * Dialog action types enum
+ * @enum {string}
+ */
+export const DIALOG_ACTIONS = {
+  ADD_PARENTS: 'addParents',
+  ADD_SIBLING: 'addSibling',
+  ADD_GRANDPARENTS: 'addGrandparents',
+  ADD_UNCLE_AUNT: 'addUncleAunt',
+  ADD_COUSIN: 'addCousin',
+  ADD_CHILD: 'addChild',
+  ADD_NIECE_NEPHEW: 'addNieceNephew',
+  ADD_PARTNER: 'addPartner'
+};
+
+/**
  * FamilyDialogService - Service for managing family tree dialogs
  *
  * @class
@@ -28,23 +43,29 @@ export class FamilyDialogService {
   /**
    * Get dialog configuration for adding parents
    *
-   * @returns {Object} {title: string, fields: Array}
+   * @returns {Object|null} {title: string, fields: Array, action: string} or null if validation fails
    */
   getAddParentsDialog() {
+    // Validate: can only add parents if we have fewer than 2
+    const validation = this.validation.canAddParents();
+    if (validation && !validation.canAdd) {
+      return null; // Validation failed - will be handled by caller
+    }
+
     return {
       title: 'Add Parents',
       fields: [
         { label: 'Parent 1 Name', type: 'text', required: true },
         { label: 'Parent 2 Name', type: 'text', required: false }
       ],
-      action: 'addParents'
+      action: DIALOG_ACTIONS.ADD_PARENTS
     };
   }
 
   /**
    * Get dialog configuration for adding sibling
    *
-   * @returns {Object} {title: string, fields: Array}
+   * @returns {Object} {title: string, fields: Array, action: string}
    */
   getAddSiblingDialog() {
     return {
@@ -52,7 +73,7 @@ export class FamilyDialogService {
       fields: [
         { label: 'Sibling Name', type: 'text', required: true }
       ],
-      action: 'addSibling'
+      action: DIALOG_ACTIONS.ADD_SIBLING
     };
   }
 
@@ -81,7 +102,7 @@ export class FamilyDialogService {
         { label: 'Grandparent 1 Name', type: 'text', required: true },
         { label: 'Grandparent 2 Name', type: 'text', required: false }
       ],
-      action: 'addGrandparents'
+      action: DIALOG_ACTIONS.ADD_GRANDPARENTS
     };
   }
 
@@ -109,7 +130,7 @@ export class FamilyDialogService {
         { label: "Parent's Side", type: 'select', options: parentOptions, required: true },
         { label: 'Uncle/Aunt Name', type: 'text', required: true }
       ],
-      action: 'addUncleAunt'
+      action: DIALOG_ACTIONS.ADD_UNCLE_AUNT
     };
   }
 
@@ -137,7 +158,7 @@ export class FamilyDialogService {
         { label: 'Uncle/Aunt', type: 'select', options: uncleAuntOptions, required: true },
         { label: 'Cousin Name', type: 'text', required: true }
       ],
-      action: 'addCousin'
+      action: DIALOG_ACTIONS.ADD_COUSIN
     };
   }
 
@@ -185,7 +206,7 @@ export class FamilyDialogService {
         { label: 'Parent', type: 'select', options: parentOptions, required: true },
         { label: 'Child Name', type: 'text', required: true }
       ],
-      action: 'addChild'
+      action: DIALOG_ACTIONS.ADD_CHILD
     };
   }
 
@@ -213,7 +234,7 @@ export class FamilyDialogService {
         { label: 'Sibling', type: 'select', options: siblingOptions, required: true },
         { label: 'Niece/Nephew Name', type: 'text', required: true }
       ],
-      action: 'addNieceNephew'
+      action: DIALOG_ACTIONS.ADD_NIECE_NEPHEW
     };
   }
 
@@ -261,35 +282,77 @@ export class FamilyDialogService {
         { label: 'Partner Of', type: 'select', options: partnerOptions, required: true },
         { label: 'Partner Name', type: 'text', required: true }
       ],
-      action: 'addPartner'
+      action: DIALOG_ACTIONS.ADD_PARTNER
     };
+  }
+
+  /**
+   * Get validation error message for a specific action
+   * Used when dialog returns null to get appropriate error message
+   *
+   * @param {string} actionType - One of DIALOG_ACTIONS
+   * @returns {string} Error message
+   */
+  getValidationMessage(actionType) {
+    const graphInstance = this.getGraphInstance();
+
+    switch (actionType) {
+      case DIALOG_ACTIONS.ADD_PARENTS: {
+        const validation = this.validation.canAddParents();
+        return validation?.message || 'Cannot add more parents (maximum 2)';
+      }
+      case DIALOG_ACTIONS.ADD_GRANDPARENTS: {
+        const parents = graphInstance?.data?.nodes.filter(n => n.group === FAMILY_GROUPS.PARENT);
+        return parents?.length === 0 ? 'You must add parents first before adding grandparents' : 'No parents available';
+      }
+      case DIALOG_ACTIONS.ADD_UNCLE_AUNT: {
+        const parents = graphInstance?.data?.nodes.filter(n => n.group === FAMILY_GROUPS.PARENT);
+        return parents?.length === 0 ? 'You must add parents first before adding uncles/aunts' : 'No parents available';
+      }
+      case DIALOG_ACTIONS.ADD_COUSIN: {
+        const unclesAunts = graphInstance?.data?.nodes.filter(n => n.group === FAMILY_GROUPS.UNCLE_AUNT);
+        return unclesAunts?.length === 0 ? 'You must add uncles/aunts first before adding cousins' : 'No uncles/aunts available';
+      }
+      case DIALOG_ACTIONS.ADD_CHILD: {
+        return 'No eligible parents available to have children';
+      }
+      case DIALOG_ACTIONS.ADD_NIECE_NEPHEW: {
+        const siblings = graphInstance?.data?.nodes.filter(n => n.group === FAMILY_GROUPS.SIBLING);
+        return siblings?.length === 0 ? 'You must add siblings first before adding nieces/nephews' : 'No siblings available';
+      }
+      case DIALOG_ACTIONS.ADD_PARTNER: {
+        return 'No eligible people available for partners (they may already have partners)';
+      }
+      default:
+        return 'Operation cannot be performed';
+    }
   }
 
   /**
    * Execute a dialog action with values
    *
-   * @param {string} action - Action name
+   * @param {string} action - Action name (from DIALOG_ACTIONS enum)
    * @param {Array} values - Dialog field values
    * @param {FamilyOperations} operations - Operations instance
    * @returns {Object} {success: boolean, message?: string}
    */
   executeAction(action, values, operations) {
     switch (action) {
-      case 'addParents':
+      case DIALOG_ACTIONS.ADD_PARENTS:
         return operations.addParents(values[0], values[1]);
-      case 'addSibling':
+      case DIALOG_ACTIONS.ADD_SIBLING:
         return operations.addSibling(values[0]);
-      case 'addGrandparents':
+      case DIALOG_ACTIONS.ADD_GRANDPARENTS:
         return operations.addGrandparents(values[0], values[1], values[2]);
-      case 'addUncleAunt':
+      case DIALOG_ACTIONS.ADD_UNCLE_AUNT:
         return operations.addUncleAunt(values[0], values[1]);
-      case 'addCousin':
+      case DIALOG_ACTIONS.ADD_COUSIN:
         return operations.addCousin(values[0], values[1]);
-      case 'addChild':
+      case DIALOG_ACTIONS.ADD_CHILD:
         return operations.addChild(values[0], values[1]);
-      case 'addNieceNephew':
+      case DIALOG_ACTIONS.ADD_NIECE_NEPHEW:
         return operations.addNieceNephew(values[0], values[1]);
-      case 'addPartner':
+      case DIALOG_ACTIONS.ADD_PARTNER:
         return operations.addPartner(values[0], values[1]);
       default:
         return { success: false, message: `Unknown action: ${action}` };

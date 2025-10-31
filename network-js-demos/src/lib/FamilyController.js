@@ -12,10 +12,10 @@ import { FAMILY_GROUPS, GROUP_COLORS } from './family/FamilyConstants.js';
 import { FamilyValidation } from './family/FamilyValidation.js';
 import { FamilyOperations } from './family/FamilyOperations.js';
 import { FamilyStorage } from './family/FamilyStorage.js';
-import { FamilyDialogService } from './family/FamilyDialogService.js';
+import { FamilyDialogService, DIALOG_ACTIONS } from './family/FamilyDialogService.js';
 
 // Re-export constants for backward compatibility
-export { FAMILY_GROUPS, GROUP_COLORS };
+export { FAMILY_GROUPS, GROUP_COLORS, DIALOG_ACTIONS };
 
 /**
  * FamilyController - Manages family tree business logic
