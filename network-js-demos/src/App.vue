@@ -225,7 +225,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useI18n } from './composables/useI18n';
 import { useDarkMode } from './composables/useDarkMode';
@@ -250,6 +250,15 @@ const isDemoPage = computed(() => {
   const demoPages = ['showcase', 'explorer', 'family'];
   return demoPages.includes(route.name);
 });
+
+// Add/remove demo-page class to body for conditional styling
+watch(isDemoPage, (isDemo) => {
+  if (isDemo) {
+    document.body.classList.add('demo-page');
+  } else {
+    document.body.classList.remove('demo-page');
+  }
+}, { immediate: true });
 
 onMounted(() => {
   initParticles();

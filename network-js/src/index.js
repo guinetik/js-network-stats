@@ -229,15 +229,15 @@ export class NetworkStats {
     }
 
     // Build graph
-    const { graph, nodes } = this.#prepareNetwork(network);
+    const { graph, nodes } = this._prepareNetwork(network);
     this.log.info(`Graph: ${nodes.length} nodes, ${graph.edges.length} edges`);
 
     // Calculate node-level statistics
-    const nodeStats = await this.#calculateNodeStats(graph, nodes, features, options);
+    const nodeStats = await this._calculateNodeStats(graph, nodes, features, options);
 
     // Calculate graph-level statistics if requested
     if (options.includeGraphStats) {
-      const graphStats = await this.#calculateGraphStats(graph, options.graphStats, options);
+      const graphStats = await this._calculateGraphStats(graph, options.graphStats, options);
       this.log.timeEnd("networkAnalysis");
       return { nodes: nodeStats, graph: graphStats };
     }
@@ -250,14 +250,14 @@ export class NetworkStats {
    * Calculate node-level statistics
    * @private
    */
-  async #calculateNodeStats(graph, nodes, features, options) {
+  async _calculateNodeStats(graph, nodes, features, options) {
     const stats = {};
 
     // Calculate each feature
     for (const feature of features) {
       if (feature === NetworkStats.FEATURES.MODULARITY) {
         // Special case: community detection
-        stats[feature] = await this.#calculateModularity(graph, options);
+        stats[feature] = await this._calculateModularity(graph, options);
       } else if (this.statisticClasses[feature]) {
         // Use statistic class (delegates to worker)
         const StatClass = this.statisticClasses[feature];
@@ -275,14 +275,14 @@ export class NetworkStats {
     }
 
     // Normalize into array of node objects
-    return this.#normalizeNodeStats(stats, nodes);
+    return this._normalizeNodeStats(stats, nodes);
   }
 
   /**
    * Calculate graph-level statistics
    * @private
    */
-  async #calculateGraphStats(graph, requestedStats, options = {}) {
+  async _calculateGraphStats(graph, requestedStats, options = {}) {
     const statsToCalculate = requestedStats || NetworkStats.GRAPH_STATS.ALL;
     const results = {};
 
@@ -306,7 +306,7 @@ export class NetworkStats {
    * Calculate modularity (community detection)
    * @private
    */
-  async #calculateModularity(graph, options = {}) {
+  async _calculateModularity(graph, options = {}) {
     const detector = new CommunityDetection(graph);
     const algorithm = new LouvainAlgorithm();
 
@@ -323,7 +323,7 @@ export class NetworkStats {
    * Build graph from network edge list
    * @private
    */
-  #prepareNetwork(network) {
+  _prepareNetwork(network) {
     // Get unique nodes
     const nodesSet = new Set();
     for (const edge of network) {
@@ -349,7 +349,7 @@ export class NetworkStats {
    * Normalize statistics into array of node objects
    * @private
    */
-  #normalizeNodeStats(stats, nodes) {
+  _normalizeNodeStats(stats, nodes) {
     const results = [];
 
     for (const nodeId of nodes) {
@@ -386,5 +386,7 @@ export { Graph };
 export { WorkerManager };
 export * from "./statistics/index.js";
 export * from "./community/index.js";
+export { COMMUNITY_REGISTRY } from "./community/index.js";
 export * from "./layouts/index.js";
+export { LAYOUT_REGISTRY } from "./layouts/index.js";
 export * from "./adapters/index.js";

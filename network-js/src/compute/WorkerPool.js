@@ -12,6 +12,7 @@
  */
 
 import { WorkerAdapter } from './WorkerAdapter.js';
+import { createLogger } from '@guinetik/logger';
 
 /**
  * Pool of workers for parallel task execution
@@ -55,6 +56,12 @@ export class WorkerPool {
     this.activeTasks = new Map(); // taskId -> { resolve, reject, onProgress, timeout }
     this.taskIdCounter = 0;
     this.initialized = false;
+
+    // Initialize logger
+    this.log = createLogger({
+      prefix: 'WorkerPool',
+      level: this.verbose ? 'debug' : 'info'
+    });
   }
 
   /**
@@ -116,7 +123,7 @@ export class WorkerPool {
       throw new Error('Workers not supported in this environment');
     }
 
-    this.log(`Initializing worker pool with ${this.maxWorkers} workers`);
+    this.log.debug('Initializing worker pool', { maxWorkers: this.maxWorkers });
 
     try {
       for (let i = 0; i < this.maxWorkers; i++) {
@@ -126,9 +133,12 @@ export class WorkerPool {
       }
 
       this.initialized = true;
-      this.log('Worker pool initialized successfully');
+      this.log.info('Worker pool initialized successfully', { workerCount: this.maxWorkers });
     } catch (error) {
-      this.log(`Failed to initialize worker pool: ${error.message}`);
+      this.log.error('Failed to initialize worker pool', { 
+        error: error.message, 
+        stack: error.stack 
+      });
       // Clean up any workers that were created
       await this.terminate();
       throw error;
@@ -154,7 +164,7 @@ export class WorkerPool {
       this.handleWorkerError(worker, error);
     });
 
-    this.log(`Worker ${id} created`);
+    this.log.debug('Worker created', { workerId: id });
     return worker;
   }
 
@@ -206,11 +216,11 @@ export class WorkerPool {
       if (this.availableWorkers.length > 0) {
         const worker = this.availableWorkers.pop();
         this.assignTask(worker, taskWithId);
-        this.log(`Task ${taskId} assigned to worker ${worker.id}`);
+        this.log.debug('Task assigned to worker', { taskId, workerId: worker.id });
       } else {
         // Queue task if no workers available
         this.taskQueue.push(taskWithId);
-        this.log(`Task ${taskId} queued (${this.taskQueue.length} in queue)`);
+        this.log.debug('Task queued', { taskId, queueLength: this.taskQueue.length });
       }
     });
   }
@@ -237,7 +247,7 @@ export class WorkerPool {
     const taskInfo = this.activeTasks.get(id);
 
     if (!taskInfo) {
-      this.log(`Received message for unknown task: ${id}`);
+      this.log.warn('Received message for unknown task', { taskId: id });
       return;
     }
 
@@ -246,11 +256,11 @@ export class WorkerPool {
       if (taskInfo.onProgress) {
         taskInfo.onProgress(progress);
       }
-      this.log(`Task ${id} progress: ${Math.round(progress * 100)}%`);
+      this.log.debug('Task progress', { taskId: id, progress: Math.round(progress * 100) });
     } else if (status === 'complete') {
       // Task completed successfully
       const duration = Date.now() - taskInfo.startTime;
-      this.log(`Task ${id} completed in ${duration}ms`);
+      this.log.debug('Task completed', { taskId: id, duration });
 
       clearTimeout(taskInfo.timeoutId);
       taskInfo.resolve(result);
@@ -258,7 +268,7 @@ export class WorkerPool {
       this.freeWorker(worker);
     } else if (status === 'error') {
       // Task failed
-      this.log(`Task ${id} failed: ${error}`);
+      this.log.error('Task failed', { taskId: id, error });
 
       clearTimeout(taskInfo.timeoutId);
       taskInfo.reject(new Error(error));
@@ -274,7 +284,11 @@ export class WorkerPool {
    * @param {Error} error - Error object
    */
   handleWorkerError(worker, error) {
-    this.log(`Worker ${worker.id} error: ${error.message}`);
+    this.log.error('Worker error', { 
+      workerId: worker.id, 
+      error: error.message, 
+      stack: error.stack 
+    });
 
     // Reject current task if any
     if (worker.currentTaskId) {
@@ -299,7 +313,7 @@ export class WorkerPool {
     const taskInfo = this.activeTasks.get(taskId);
     if (!taskInfo) return;
 
-    this.log(`Task ${taskId} timed out`);
+    this.log.warn('Task timed out', { taskId, timeout: this.taskTimeout });
 
     taskInfo.reject(new Error(`Task timed out after ${this.taskTimeout}ms`));
     this.activeTasks.delete(taskId);
@@ -323,7 +337,7 @@ export class WorkerPool {
       // Assign next queued task
       const nextTask = this.taskQueue.shift();
       this.assignTask(worker, nextTask);
-      this.log(`Task ${nextTask.id} assigned to worker ${worker.id} (from queue)`);
+      this.log.debug('Task assigned from queue', { taskId: nextTask.id, workerId: worker.id });
     } else {
       // Return to available pool
       this.availableWorkers.push(worker);
@@ -339,7 +353,7 @@ export class WorkerPool {
     const index = this.workers.indexOf(oldWorker);
     if (index === -1) return;
 
-    this.log(`Restarting worker ${oldWorker.id}`);
+    this.log.debug('Restarting worker', { workerId: oldWorker.id });
 
     try {
       // Terminate old worker
@@ -350,9 +364,13 @@ export class WorkerPool {
       this.workers[index] = newWorker;
       this.availableWorkers.push(newWorker);
 
-      this.log(`Worker ${oldWorker.id} restarted successfully`);
+      this.log.info('Worker restarted successfully', { workerId: oldWorker.id });
     } catch (error) {
-      this.log(`Failed to restart worker ${oldWorker.id}: ${error.message}`);
+      this.log.error('Failed to restart worker', { 
+        workerId: oldWorker.id, 
+        error: error.message, 
+        stack: error.stack 
+      });
       // Remove from workers array if can't restart
       this.workers.splice(index, 1);
     }
@@ -369,14 +387,14 @@ export class WorkerPool {
       return;
     }
 
-    this.log(`Waiting for ${this.activeTasks.size} active tasks...`);
+    this.log.debug('Waiting for active tasks', { taskCount: this.activeTasks.size, timeout });
 
     return new Promise((resolve) => {
       const startTime = Date.now();
       const checkInterval = setInterval(() => {
         if (this.activeTasks.size === 0 || Date.now() - startTime > timeout) {
           clearInterval(checkInterval);
-          this.log(`Wait complete (${this.activeTasks.size} tasks remaining)`);
+          this.log.debug('Wait complete', { remainingTasks: this.activeTasks.size });
           resolve();
         }
       }, 100);
@@ -394,7 +412,7 @@ export class WorkerPool {
       return;
     }
 
-    this.log('Terminating worker pool...');
+    this.log.info('Terminating worker pool', { force });
 
     // Wait for tasks to complete unless forced
     if (!force) {
@@ -413,7 +431,10 @@ export class WorkerPool {
       try {
         worker.terminate();
       } catch (e) {
-        this.log(`Error terminating worker ${worker.id}: ${e.message}`);
+        this.log.error('Error terminating worker', { 
+          workerId: worker.id, 
+          error: e.message 
+        });
       }
     });
 
@@ -422,7 +443,7 @@ export class WorkerPool {
     this.taskQueue = [];
     this.initialized = false;
 
-    this.log('Worker pool terminated');
+    this.log.info('Worker pool terminated');
   }
 
   /**
@@ -446,14 +467,6 @@ export class WorkerPool {
     };
   }
 
-  /**
-   * Log message if verbose mode enabled
-   * @private
-   * @param {string} message - Message to log
-   */
-  log(message) {
-    console.log(`[WorkerPool] ${message}`);
-  }
 }
 
 export default WorkerPool;

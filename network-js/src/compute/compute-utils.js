@@ -9,6 +9,13 @@
  */
 
 import Graph from '../graph.js';
+import { createLogger } from '@guinetik/logger';
+
+// Create logger for compute utils (runs in worker context)
+const log = createLogger({
+  prefix: 'compute-utils',
+  level: 'info' // Default to info, can be verbose in debug builds
+});
 
 /**
  * Reconstruct a Graph instance from serialized data
@@ -19,7 +26,7 @@ import Graph from '../graph.js';
  * @returns {Graph} Reconstructed graph instance
  */
 export function reconstructGraph(graphData) {
-  console.log('[reconstructGraph] Starting reconstruction with:', {
+  log.debug('Starting reconstruction', {
     isObject: graphData && typeof graphData === 'object',
     hasNodes: graphData && 'nodes' in graphData,
     hasEdges: graphData && 'edges' in graphData,
@@ -30,13 +37,13 @@ export function reconstructGraph(graphData) {
 
   // Defensive: ensure graphData is valid
   if (!graphData || typeof graphData !== 'object') {
-    console.error('Invalid graphData passed to reconstructGraph:', graphData);
+    log.error('Invalid graphData passed to reconstructGraph', { graphData });
     return graph;
   }
 
   // Add all nodes - handle both array and iterable formats
   if (graphData.nodes !== undefined && graphData.nodes !== null) {
-    console.log('[reconstructGraph] Processing nodes:', {
+    log.debug('Processing nodes', {
       type: typeof graphData.nodes,
       isArray: Array.isArray(graphData.nodes),
       length: Array.isArray(graphData.nodes) ? graphData.nodes.length : 'N/A'
@@ -54,30 +61,33 @@ export function reconstructGraph(graphData) {
         throw new Error(`nodes is not iterable: ${typeof graphData.nodes}`);
       }
 
-      console.log('[reconstructGraph] Node array created:', { length: nodeArray.length });
+      log.debug('Node array created', { length: nodeArray.length });
 
       nodeArray.forEach(nodeId => {
         graph.addNode(nodeId);
       });
 
-      console.log('[reconstructGraph] Nodes added successfully, graph.nodes:', {
+      log.debug('Nodes added successfully', {
         type: typeof graph.nodes,
         size: graph.nodes.size
       });
     } catch (error) {
-      console.error('[reconstructGraph] Error adding nodes:', error);
-      console.error('  nodes value:', graphData.nodes);
-      console.error('  nodes type:', typeof graphData.nodes);
-      console.error('  nodes constructor:', graphData.nodes?.constructor?.name);
+      log.error('Error adding nodes', {
+        error: error.message,
+        stack: error.stack,
+        nodesValue: graphData.nodes,
+        nodesType: typeof graphData.nodes,
+        nodesConstructor: graphData.nodes?.constructor?.name
+      });
       throw new Error(`Failed to reconstruct nodes: ${error.message}`);
     }
   } else {
-    console.warn('[reconstructGraph] No nodes found in graphData');
+    log.warn('No nodes found in graphData');
   }
 
   // Add all edges - handle edge format variations
   if (graphData.edges !== undefined && graphData.edges !== null) {
-    console.log('[reconstructGraph] Processing edges:', {
+    log.debug('Processing edges', {
       type: typeof graphData.edges,
       isArray: Array.isArray(graphData.edges),
       length: Array.isArray(graphData.edges) ? graphData.edges.length : 'N/A'
@@ -93,7 +103,7 @@ export function reconstructGraph(graphData) {
         throw new Error(`edges is not iterable: ${typeof graphData.edges}`);
       }
 
-      console.log('[reconstructGraph] Edge array created:', { length: edgeArray.length });
+      log.debug('Edge array created', { length: edgeArray.length });
 
       edgeArray.forEach(edge => {
         // Handle both {source, target} and {u, v} formats
@@ -106,18 +116,21 @@ export function reconstructGraph(graphData) {
         }
       });
 
-      console.log('[reconstructGraph] Edges added successfully');
+      log.debug('Edges added successfully');
     } catch (error) {
-      console.error('[reconstructGraph] Error adding edges:', error);
-      console.error('  edges value:', graphData.edges);
-      console.error('  edges type:', typeof graphData.edges);
+      log.error('Error adding edges', {
+        error: error.message,
+        stack: error.stack,
+        edgesValue: graphData.edges,
+        edgesType: typeof graphData.edges
+      });
       throw new Error(`Failed to reconstruct edges: ${error.message}`);
     }
   } else {
-    console.warn('[reconstructGraph] No edges found in graphData');
+    log.warn('No edges found in graphData');
   }
 
-  console.log('[reconstructGraph] Reconstruction complete:', {
+  log.debug('Reconstruction complete', {
     nodes: graph.nodes.size,
     edges: graph.edges.length
   });

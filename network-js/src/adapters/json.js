@@ -1,4 +1,10 @@
 import { Adapter } from './adapter.js';
+import { createLogger } from '@guinetik/logger';
+
+const log = createLogger({
+  prefix: 'JSONAdapter',
+  level: 'info'
+});
 
 /**
  * JSONAdapter - Convert between various JSON graph formats
@@ -235,7 +241,11 @@ export class JSONAdapter extends Adapter {
       const jsonData = await response.json();
       return this.fromFormat(jsonData);
     } catch (error) {
-      console.error('Error loading JSON:', error);
+      log.error('Error loading JSON', {
+        url,
+        error: error.message,
+        stack: error.stack
+      });
       throw error;
     }
   }

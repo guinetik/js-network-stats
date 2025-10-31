@@ -2,10 +2,28 @@
   "name": "@guinetik/network-js",
   "version": "1.0.0",
   "description": "A nodejs micro package to help calculating stats for network graphs",
-  "main": "./src/index.js",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
   "types": "./types/index.d.ts",
   "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./types/index.d.ts"
+    },
+    "./worker": "./dist/network-worker.js",
+    "./worker-url": "./dist/worker-url.js"
+  },
+  "files": [
+    "dist",
+    "types",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
+    "build": "vite build",
+    "build:watch": "vite build --watch",
+    "prepublishOnly": "npm run build",
     "test": "vitest run --coverage",
     "test:watch": "vitest"
   },
@@ -32,7 +50,8 @@
     "@guinetik/logger": "^1.0.0"
   },
   "devDependencies": {
-    "vitest": "^0.34.6",
-    "@vitest/coverage-v8": "^0.34.6"
+    "@vitest/coverage-v8": "^0.34.6",
+    "vite": "^7.1.12",
+    "vitest": "^0.34.6"
   }
 }

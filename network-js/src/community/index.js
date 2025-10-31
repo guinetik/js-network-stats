@@ -254,4 +254,75 @@ export class CommunityDetection {
 // Export algorithm classes alongside CommunityDetection
 export { CommunityAlgorithm, LouvainAlgorithm } from './algorithms/index.js';
 
+/**
+ * Registry of available community detection algorithms with metadata.
+ * This is the single source of truth for all available community detection algorithms.
+ * Use this in UIs to populate algorithm selectors instead of hardcoding options.
+ *
+ * @example
+ * import { COMMUNITY_REGISTRY } from './community/index.js';
+ *
+ * // Get all algorithms
+ * const allAlgorithms = COMMUNITY_REGISTRY.getAll();
+ *
+ * // Get specific algorithm metadata
+ * const louvain = COMMUNITY_REGISTRY.get('louvain');
+ */
+export const COMMUNITY_REGISTRY = {
+  /**
+   * Metadata for each community detection algorithm
+   * @private
+   */
+  algorithms: [
+    {
+      id: 'louvain',
+      name: 'Louvain Method',
+      description: 'Fast greedy algorithm that optimizes modularity',
+      category: 'modularity',
+      complexity: 'O(n log n)',
+      bestFor: ['General graphs', 'Large networks', 'Hierarchical communities'],
+      supportsWeighted: true,
+      supportsDirected: false,
+      defaultOptions: {
+        resolution: 1.0,
+        maxIterations: 100
+      }
+    }
+  ],
+
+  /**
+   * Get all available community detection algorithms
+   * @returns {Array} Array of algorithm metadata objects
+   */
+  getAll() {
+    return [...this.algorithms];
+  },
+
+  /**
+   * Get metadata for a specific algorithm
+   * @param {string} id - Algorithm ID
+   * @returns {Object|null} Algorithm metadata or null if not found
+   */
+  get(id) {
+    return this.algorithms.find(algo => algo.id === id) || null;
+  },
+
+  /**
+   * Filter algorithms by predicate function
+   * @param {Function} predicate - Filter function
+   * @returns {Array} Filtered array of algorithm metadata
+   */
+  filter(predicate) {
+    return this.algorithms.filter(predicate);
+  },
+
+  /**
+   * Get algorithm IDs only
+   * @returns {Array<string>} Array of algorithm IDs
+   */
+  getIds() {
+    return this.algorithms.map(algo => algo.id);
+  }
+};
+
 export default CommunityDetection;

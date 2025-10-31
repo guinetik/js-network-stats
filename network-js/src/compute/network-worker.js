@@ -1,42 +1,79 @@
 /**
- * Generic Network Worker - Executes compute functions dynamically
+ * Network Worker - Executes compute functions from algorithm modules
  *
- * This worker uses dynamic imports to load algorithm modules and
- * execute their compute functions. It's generic and doesn't know
- * about specific algorithms - they're loaded on demand.
- *
- * **Architecture:**
+ * **Bundler-Friendly Architecture:**
+ * - Statically imports all algorithm modules upfront
+ * - Creates a registry that maps module paths to their exports
  * - Main thread sends: { id, module, functionName, args }
- * - Worker imports module dynamically
- * - Worker executes function with args
- * - Worker sends back result
+ * - Worker looks up module from registry and executes function
+ *
+ * This approach works with all bundlers (Vite, Webpack, Rollup) because
+ * imports are known at build time.
  *
  * @module network-worker
  */
 
-// Platform detection
-const isNodeEnvironment = typeof importScripts === 'undefined';
+import { createLogger } from '@guinetik/logger';
 
-// Setup Node.js worker thread environment (if needed)
-if (isNodeEnvironment) {
-  try {
-    const { parentPort } = require('worker_threads');
+// ============================================================================
+// STATIC IMPORTS - All algorithm modules imported upfront
+// ============================================================================
 
-    // Adapt Node.js Worker Thread API to WebWorker-like interface
-    global.self = {
-      postMessage: (msg) => parentPort.postMessage(msg),
-      onmessage: null
-    };
+// Create logger for worker (runs in separate context, no window.logFilter)
+const log = createLogger({
+  prefix: 'network-worker',
+  level: 'info' // Workers default to info level
+});
 
-    parentPort.on('message', (msg) => {
-      if (global.self.onmessage) {
-        global.self.onmessage({ data: msg });
-      }
-    });
-  } catch (e) {
-    console.error('Failed to initialize Node.js worker:', e.message);
-  }
-}
+// Statistics algorithms (node-level and graph-level)
+import * as nodeStatsCompute from '../statistics/algorithms/node-stats.js';
+import * as graphStatsCompute from '../statistics/algorithms/graph-stats.js';
+
+// Community detection algorithms
+import * as louvainCompute from '../community/algorithms/louvain.js';
+
+// Layout algorithms
+import * as randomCompute from '../layouts/random.js';
+import * as circularCompute from '../layouts/circular.js';
+import * as spiralCompute from '../layouts/spiral.js';
+import * as shellCompute from '../layouts/shell.js';
+import * as spectralCompute from '../layouts/spectral.js';
+import * as forceDirectedCompute from '../layouts/force-directed.js';
+import * as kamadaKawaiCompute from '../layouts/kamada-kawai.js';
+import * as bipartiteCompute from '../layouts/bipartite.js';
+import * as multipartiteCompute from '../layouts/multipartite.js';
+import * as bfsCompute from '../layouts/bfs.js';
+
+// ============================================================================
+// MODULE REGISTRY - Maps module paths to their exports
+// ============================================================================
+
+const MODULE_REGISTRY = {
+  // Node-level statistics (all in one file)
+  '../statistics/algorithms/node-stats.js': nodeStatsCompute,
+
+  // Graph-level statistics
+  '../statistics/algorithms/graph-stats.js': graphStatsCompute,
+
+  // Community
+  '../community/algorithms/louvain.js': louvainCompute,
+
+  // Layouts
+  '../layouts/random.js': randomCompute,
+  '../layouts/circular.js': circularCompute,
+  '../layouts/spiral.js': spiralCompute,
+  '../layouts/shell.js': shellCompute,
+  '../layouts/spectral.js': spectralCompute,
+  '../layouts/force-directed.js': forceDirectedCompute,
+  '../layouts/kamada-kawai.js': kamadaKawaiCompute,
+  '../layouts/bipartite.js': bipartiteCompute,
+  '../layouts/multipartite.js': multipartiteCompute,
+  '../layouts/bfs.js': bfsCompute
+};
+
+// ============================================================================
+// WORKER MESSAGE HANDLER
+// ============================================================================
 
 /**
  * Main message handler - receives tasks and delegates to algorithm modules
@@ -50,8 +87,7 @@ self.onmessage = async function(event) {
       throw new Error('Invalid task: module and functionName are required');
     }
 
-    // Debug: Log task being processed
-    console.log('[network-worker] Processing task:', {
+    log.debug('Processing task', {
       id,
       module,
       functionName,
@@ -67,36 +103,24 @@ self.onmessage = async function(event) {
       });
     };
 
-    // Dynamic import of algorithm module
-    let algorithmModule;
+    // Look up algorithm module from registry
+    const algorithmModule = MODULE_REGISTRY[module];
 
-    if (isNodeEnvironment) {
-      // Node.js: use require (dynamic import may not work in some Node versions)
-      algorithmModule = require(module);
-    } else {
-      // Browser: use dynamic import with proper URL resolution
-      // Resolve module path relative to this worker file
-      let moduleUrl = module;
-      if (!module.startsWith('/') && !module.startsWith('http')) {
-        // For relative paths, resolve them relative to the worker's location
-        try {
-          moduleUrl = new URL(module, import.meta.url).href;
-          console.log(`[network-worker] Resolved module path: '${module}' -> '${moduleUrl}'`);
-        } catch (e) {
-          // If URL constructor fails, fall back to the original module path
-          console.warn(`[network-worker] Failed to resolve module URL for '${module}':`, e.message);
-        }
-      }
-      console.log(`[network-worker] Importing module: '${moduleUrl}'`);
-      algorithmModule = await import(moduleUrl);
-      console.log(`[network-worker] Successfully imported module. Exports:`, Object.keys(algorithmModule || {}));
+    if (!algorithmModule) {
+      throw new Error(
+        `Module '${module}' not found in registry. ` +
+        `Available modules: ${Object.keys(MODULE_REGISTRY).join(', ')}`
+      );
     }
 
     // Get the compute function
     const computeFunction = algorithmModule[functionName];
 
     if (!computeFunction || typeof computeFunction !== 'function') {
-      throw new Error(`Function '${functionName}' not found in module '${module}'`);
+      throw new Error(
+        `Function '${functionName}' not found in module '${module}'. ` +
+        `Available functions: ${Object.keys(algorithmModule).join(', ')}`
+      );
     }
 
     // Execute the compute function
@@ -112,6 +136,11 @@ self.onmessage = async function(event) {
 
   } catch (error) {
     // Send error
+    log.error('Task failed', {
+      id,
+      error: error.message,
+      stack: error.stack
+    });
     self.postMessage({
       id,
       status: 'error',
@@ -125,9 +154,15 @@ self.onmessage = async function(event) {
  * Handle worker errors
  */
 self.onerror = function(error) {
-  console.error('Worker error:', error);
+  log.error('Worker error', {
+    error: error.message || 'Worker error occurred',
+    stack: error.stack
+  });
   self.postMessage({
     status: 'error',
     error: error.message || 'Worker error occurred'
   });
 };
+
+// Log worker initialization
+log.info('Initialized', { moduleCount: Object.keys(MODULE_REGISTRY).length });

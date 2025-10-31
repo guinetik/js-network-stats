@@ -9,6 +9,7 @@
 
 import { WorkerPool } from './WorkerPool.js';
 import { WorkerAdapter } from './WorkerAdapter.js';
+import { createLogger } from '@guinetik/logger';
 
 /**
  * Singleton WorkerManager
@@ -24,6 +25,10 @@ class WorkerManager {
     this.workerPool = null;
     this.initialized = false;
     this.initPromise = null;
+    this.log = createLogger({
+      prefix: 'WorkerManager',
+      level: 'info' // Can be overridden by verbose option
+    });
 
     WorkerManager.instance = this;
   }
@@ -71,6 +76,9 @@ class WorkerManager {
       verbose = false
     } = options;
 
+    // Set logger level based on verbose option
+    this.log.setLevel(verbose ? 'debug' : 'info');
+
     // Determine worker script path
     let workerPath = workerScript;
     if (!workerPath) {
@@ -80,9 +88,7 @@ class WorkerManager {
       } catch (e) {
         // Fallback for environments where import.meta.url doesn't work
         workerPath = '/network-js/src/compute/network-worker.js';
-        if (verbose) {
-          console.warn('[WorkerManager] Could not resolve worker path from import.meta.url, using fallback:', workerPath);
-        }
+        this.log.warn('Could not resolve worker path from import.meta.url, using fallback', { workerPath });
       }
     }
 
@@ -105,9 +111,9 @@ class WorkerManager {
     await this.workerPool.initialize();
     this.initialized = true;
 
-    if (verbose) {
-      console.log(`[WorkerManager] Initialized with ${this.workerPool.maxWorkers} workers`);
-    }
+    this.log.info('Initialized successfully', { 
+      workerCount: this.workerPool.maxWorkers 
+    });
   }
 
   /**

@@ -17,6 +17,14 @@
  *   }
  * }
  */
+
+import { createLogger } from '@guinetik/logger';
+
+const log = createLogger({
+  prefix: 'Adapter',
+  level: 'info'
+});
+
 export class Adapter {
   /**
    * Convert from external format to standard GraphData
@@ -136,9 +144,10 @@ export class Adapter {
     }
 
     if (warn && invalidEdges.length > 0) {
-      console.warn(
-        `Filtered out ${invalidEdges.length} edges referencing non-existent nodes`
-      );
+      log.warn('Filtered out edges referencing non-existent nodes', {
+        invalidEdgeCount: invalidEdges.length,
+        totalEdges: graphData.edges.length
+      });
     }
 
     return {

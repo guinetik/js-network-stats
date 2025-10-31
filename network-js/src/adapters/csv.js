@@ -1,4 +1,10 @@
 import { Adapter } from './adapter.js';
+import { createLogger } from '@guinetik/logger';
+
+const log = createLogger({
+  prefix: 'CSVAdapter',
+  level: 'info'
+});
 
 /**
  * CSVAdapter - Parse CSV files into network graph format
@@ -247,7 +253,12 @@ export class CSVAdapter extends Adapter {
 
       return this.fromFormat(edgeCSV, nodeCSV, options);
     } catch (error) {
-      console.error('Error loading CSV:', error);
+      log.error('Error loading CSV', {
+        edgeURL,
+        nodeURL,
+        error: error.message,
+        stack: error.stack
+      });
       throw error;
     }
   }
@@ -277,7 +288,12 @@ export class CSVAdapter extends Adapter {
 
       return this.fromFormat(edgeCSV, nodeCSV, options);
     } catch (error) {
-      console.error('Error reading file:', error);
+      log.error('Error reading file', {
+        edgeFileName: edgeFile?.name,
+        nodeFileName: nodeFile?.name,
+        error: error.message,
+        stack: error.stack
+      });
       throw error;
     }
   }
