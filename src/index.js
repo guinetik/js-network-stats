@@ -1,146 +1,133 @@
-const jsnetworkx = require("jsnetworkx");
-const louvain = require("./lib.louvain");
-const FEATURES = {
-  EIGENVECTOR: "eigenvector",
-  MODULARITY: "modularity",
-  BETWEENNESS: "betweenness",
-  CLUSTERING: "clustering",
-  TRANSITIVITY: "transitivity",
-  CLIQUES: "cliques",
-  DEGREE: "degree",
-  ALL: [
-    "degree",
-    "modularity",
-    "cliques",
-    "eigenvector",
-    "betweenness",
-    "clustering",
-  ],
-};
 /**
- * @typedef NetworkEdge - An edge in a network is one of the connections between nodes or vertices of the network.
- * @type {Object}
- * @property {string} source - The ID of the source node.
- * @property {string} target - The ID of the target node.
+ * js-network-stats - Network graph statistics calculator
+ * A micro-package for calculating network graph metrics
+ * @module js-network-stats
  */
+
+import { FEATURES } from './core/constants.js';
+import { normalizeFeatures } from './core/normalizer.js';
+import { validateNetwork } from './validators/network.js';
+import { validateFeatures } from './validators/features.js';
+import { getAllUniqueNodes } from './graph/utils.js';
+import { buildGraph } from './graph/builder.js';
+import { calculateFeatures } from './features/index.js';
+
+// Re-export FEATURES constant
+export { FEATURES };
+
 /**
- * Generates a set of stats for a given graph network.
- * @param {Array<NetworkEdge>} network - The network to be analyzed.
- * @param {Array<string>} features- a list of features to be included in the stats.
+ * @typedef {Object} NetworkEdge
+ * @property {string} source - The ID of the source node
+ * @property {string} target - The ID of the target node
+ * @property {number} [weight] - Optional edge weight
  */
-const getNetworkStats = (
+
+/**
+ * @typedef {Object} NetworkOptions
+ * @property {number} [maxIter=100000] - Maximum iterations for eigenvector calculation
+ * @property {boolean} [verbose=true] - Enable console output
+ */
+
+/**
+ * @typedef {Object} NodeStats
+ * @property {string} id - Node identifier
+ * @property {number} [degree] - Node degree (number of connections)
+ * @property {number} [eigenvector] - Eigenvector centrality score
+ * @property {number} [betweenness] - Betweenness centrality score
+ * @property {number} [clustering] - Clustering coefficient
+ * @property {number} [cliques] - Number of cliques containing this node
+ * @property {number} [modularity] - Community/modularity assignment
+ */
+
+/**
+ * Generates statistics for a network graph
+ *
+ * @param {Array<NetworkEdge>} network - Array of edge objects with source and target properties
+ * @param {Array<string>} [features] - Array of features to calculate. If null, calculates all features
+ * @param {NetworkOptions} [options] - Configuration options
+ * @param {number} [options.maxIter=100000] - Maximum iterations for eigenvector calculation
+ * @param {boolean} [options.verbose=true] - Enable detailed console output
+ * @returns {Array<NodeStats>} Array of node objects with calculated statistics
+ *
+ * @throws {TypeError} If network is not an array or features is not an array
+ * @throws {Error} If network is empty or contains invalid edges
+ *
+ * @example
+ * import { getNetworkStats, FEATURES } from 'js-network-stats';
+ *
+ * const network = [
+ *   { source: 'A', target: 'B' },
+ *   { source: 'B', target: 'C' },
+ *   { source: 'C', target: 'A' }
+ * ];
+ *
+ * const stats = getNetworkStats(network, [FEATURES.DEGREE, FEATURES.EIGENVECTOR]);
+ * console.log(stats);
+ * // [
+ * //   { id: 'A', degree: 2, eigenvector: 0.577 },
+ * //   { id: 'B', degree: 2, eigenvector: 0.577 },
+ * //   { id: 'C', degree: 2, eigenvector: 0.577 }
+ * // ]
+ */
+export function getNetworkStats(
   network,
-  features,
+  features = null,
   options = { maxIter: 100000, verbose: true }
-) => {
-  console.time("getNetworkStats");
-  if (options.verbose) console.log("processing", network.length, "records");
-  if (!features) features = FEATURES.ALL;
-  //get unique source and target values from network
-  const nodes = getDistinctNodes(network, "source").concat(
-    getDistinctNodes(network, "target")
-  );
-  const distinct = nodes.filter((item, pos) => nodes.indexOf(item) === pos);
-  const edges = reduce2EdgeTuples(network);
-  var G = new jsnetworkx.Graph();
-  G.addNodesFrom(distinct);
-  G.addEdgesFrom(edges);
-  //
-  const stats = {};
-  if (features.includes(FEATURES.EIGENVECTOR)) {
-    try {
-      if (options.verbose) console.log("processing EIGENVECTOR");
-      stats[FEATURES.EIGENVECTOR] = jsnetworkx.eigenvectorCentrality(G, {
-        maxIter: options.maxIter,
-      })._stringValues;
-    } catch (err) {
-      if (options.verbose)
-        console.log("error processing FEATURES.EIGENVECTOR:", err);
-    }
-  }
-  //
-  if (features.includes(FEATURES.BETWEENNESS)) {
-    try {
-      if (options.verbose) console.log("processing BETWEENNESS");
-      stats[FEATURES.BETWEENNESS] =
-        jsnetworkx.betweennessCentrality(G)._stringValues;
-    } catch (err) {
-      if (options.verbose)
-        console.log("error processing FEATURES.BETWEENNESS:", err);
-    }
-  }
-  //
-  if (features.includes(FEATURES.CLUSTERING)) {
-    try {
-      if (options.verbose) console.log("processing CLUSTERING");
-      stats[FEATURES.CLUSTERING] = jsnetworkx.clustering(G)._stringValues;
-    } catch (err) {
-      if (options.verbose)
-        console.log("error processing FEATURES.CLUSTERING:", err);
-    }
-  }
-  //
-  if (features.includes(FEATURES.CLIQUES)) {
-    try {
-      if (options.verbose) console.log("processing CLIQUES");
-      stats[FEATURES.CLIQUES] = jsnetworkx.numberOfCliques(G)._stringValues;
-    } catch (err) {
-      if (options.verbose)
-        console.log("error processing FEATURES.CLIQUES:", err);
-    }
-  }
-  //
-  if (features.includes(FEATURES.DEGREE)) {
-    try {
-      if (options.verbose) console.log("processing DEGREE");
-      stats[FEATURES.DEGREE] = jsnetworkx.degree(G)._stringValues;
-    } catch (err) {
-      if (options.verbose)
-        console.log("error processing FEATURES.DEGREE:", err);
-    }
-  }
-  //
-  if (features.includes(FEATURES.MODULARITY)) {
-    try {
-      if (options.verbose) console.log("processing MODULARITY");
-      let community = louvain().nodes(distinct).edges(network);
-      stats[FEATURES.MODULARITY] = community();
-    } catch (err) {
-      if (options.verbose)
-        console.log("error processing FEATURES.MODULARITY:", err);
-    }
-  }
-  //
-  return normalizeFeatures(stats, distinct);
-};
+) {
+  const startTime = performance.now();
 
-normalizeFeatures = (stats, nodes) => {
-  const normalized = [];
-  for (const node of nodes) {
-    const nodeStats = {};
-    nodeStats.id = node;
-    for (const feature in stats) {
-      nodeStats[feature] = stats[feature][node];
+  // Validate network input
+  try {
+    validateNetwork(network);
+  } catch (error) {
+    if (options.verbose) {
+      console.error('Network validation failed:', error.message);
     }
-    normalized.push(nodeStats);
+    throw error;
   }
-  console.timeEnd("getNetworkStats");
-  return normalized;
-};
 
-const getDistinctNodes = (network, prop) => {
-  return network
-    .map((item) => item[prop])
-    .filter((value, index, self) => self.indexOf(value) === index);
-};
-const reduce2EdgeTuples = (network) => {
-  return network.reduce((acc, curr) => {
-    const edge = [];
-    edge.push(curr.source);
-    edge.push(curr.target);
-    acc.push(edge);
-    return acc;
-  }, []);
-};
-//
-module.exports = getNetworkStats;
+  // Default to all features if none specified
+  if (!features) {
+    features = FEATURES.ALL;
+  }
+
+  // Validate features
+  try {
+    validateFeatures(features);
+  } catch (error) {
+    if (options.verbose) {
+      console.error('Features validation failed:', error.message);
+    }
+    throw error;
+  }
+
+  if (options.verbose) {
+    console.log(`Processing ${network.length} edges...`);
+  }
+
+  // Extract unique nodes
+  const nodes = getAllUniqueNodes(network);
+
+  // Build graph
+  const graph = buildGraph(network);
+
+  if (options.verbose) {
+    console.log(`Graph created with ${nodes.length} nodes and ${network.length} edges`);
+  }
+
+  // Calculate features
+  const stats = calculateFeatures(features, graph, nodes, network, options);
+
+  // Normalize results
+  const result = normalizeFeatures(stats, nodes);
+
+  if (options.verbose) {
+    const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+    console.log(`✓ Completed in ${elapsed}s`);
+  }
+
+  return result;
+}
+
+// Default export for CommonJS compatibility
+export default getNetworkStats;

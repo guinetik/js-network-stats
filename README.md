@@ -1,88 +1,393 @@
 # js-network-stats
-A nodejs micro-package to help calculating stats for network graphs.
 
-It uses [JSNetworkX](https://felix-kling.de/jsnetworkx/) to generate metrics about a network graph. The original use case is for a serveless function so think of this as a batch operation to generate metrics on demand.
+> **⚠️ Final Stable Release** - This package is in maintenance mode. For new projects with advanced features (worker parallelism, custom layouts, interactive visualizations), check out [@guinetik/graph-js](https://github.com/guinetik/graph-js).
 
-## Usage
-```js
-import {getNetworkStats} from 'js-network-stats'
-const myStats = getNetworkStats(edge_data, feature, options)
+A lightweight, serverless-friendly Node.js package for calculating network graph statistics. Perfect for AWS Lambda, batch jobs, and simple graph analysis.
+
+## Why Use This?
+
+- ✅ **Simple API**: Sync for small graphs, async for large graphs
+- ✅ **Async with Workers**: Non-blocking computation with Node.js worker threads
+- ✅ **Auto-Detection**: Automatically uses workers for graphs >500 edges
+- ✅ **Progress Callbacks**: Real-time progress updates for long operations
+- ✅ **Serverless-Friendly**: Sync API perfect for Lambda, async for long-running servers
+- ✅ **Batteries Included**: Eigenvector, betweenness, clustering, community detection
+- ✅ **TypeScript Support**: Full type definitions included
+- ✅ **Minimal Dependencies**: Just jsnetworkx + built-in Louvain algorithm
+
+## Installation
+
+```bash
+npm install js-network-stats
 ```
-Where 
-- `edge_data` - an array of edge objects with the format `{source:"A", target:"B"}`
-- `feature` - an array of strings describing the desired features to extract
-- `options` - an object with options.
-    - `options.verbose` - boolean - toggles console output
-    - `options.maxIter` - number - max number of iterations for eigenvector calculation.
-## Example
-```js
-const edge_data = [
-    { source: "id1", target: "id2" },
-    { source: "id2", target: "id3" },
-    { source: "id3", target: "id1" },
+
+## Quick Start
+
+### Synchronous API (Simple & Fast)
+
+Perfect for small graphs (<500 edges), serverless functions, and batch jobs:
+
+```javascript
+import { getNetworkStats, FEATURES } from 'js-network-stats';
+
+const network = [
+  { source: 'Alice', target: 'Bob' },
+  { source: 'Bob', target: 'Carol' },
+  { source: 'Carol', target: 'Alice' },
+  { source: 'David', target: 'Carol' }
 ];
-const stats = getNetworkStats(edge_data, null, { verbose: true });
-console.log("stats", stats);
-//outputs...
-stats [
-  {
-    id: 'id1',
-    eigenvector: 0.5773502691896257,
-    betweenness: 0,
-    clustering: 1,
-    cliques: 1,
-    degree: 2,
-    modularity: 0
-  },
-  {
-    id: 'id2',
-    eigenvector: 0.5773502691896257,
-    betweenness: 0,
-    clustering: 1,
-    cliques: 1,
-    degree: 2,
-    modularity: 1
-  },
-  {
-    id: 'id3',
-    eigenvector: 0.5773502691896257,
-    betweenness: 0,
-    clustering: 1,
-    cliques: 1,
-    degree: 2,
-    modularity: 2
-  }
-]
+
+const stats = getNetworkStats(network, [FEATURES.DEGREE, FEATURES.EIGENVECTOR]);
+
+console.log(stats);
+// [
+//   { id: 'Alice', degree: 2, eigenvector: 0.577 },
+//   { id: 'Bob', degree: 2, eigenvector: 0.577 },
+//   { id: 'Carol', degree: 3, eigenvector: 0.707 },
+//   { id: 'David', degree: 1, eigenvector: 0.408 }
+// ]
 ```
 
-## Features
-The second parameter of `getNetworkStats` expect an array of strings. These are the features you want to extract:
+### Async API (Non-Blocking with Workers)
 
-### **eigenvector**
-In graph theory, eigenvector centrality (also called eigencentrality or prestige score[1]) is a measure of the influence of a node in a network. Relative scores are assigned to all nodes in the network based on the concept that connections to high-scoring nodes contribute more to the score of the node in question than equal connections to low-scoring nodes. A high eigenvector score means that a node is connected to many nodes who themselves have high scores.
+Perfect for large graphs (>500 edges), long-running servers, and CLI tools:
 
-Eigenvector centrality computes the centrality for a node based on the centrality of its neighbors. The eigenvector centrality for node $i$ is $$Ax = \lambda x$$ where $A$ is the adjacency matrix of the graph `G` with eigenvalue $\lambda$. By virtue of the Perron-Frobinus theorem, there is a unique and positive solution if $\lambda$ is the largest eigenvalue associated with the eigenvector of the adjacency matrix `A`.
+```javascript
+import { getNetworkStatsAsync, cleanup } from 'js-network-stats/async';
 
+const network = [...]; // Your large network
 
-### **modularity**
-Communities are groups of nodes within a network that are more densely connected to one another than to other nodes. Modularity is a metric that quantifies the quality of an assignment of nodes to communities by evaluating how much more densely connected the nodes within a community are compared to how connected they would be, on average, in a suitably defined random network.
+// Automatic worker detection
+const stats = await getNetworkStatsAsync(network, ['degree', 'betweenness'], {
+  onProgress: (progress) => console.log(`${Math.round(progress * 100)}%`)
+});
 
-The script uses [Louvain](https://github.com/upphiminn/jLouvain) community detection algorithm to sort related nodes with different modularities. The function returns an integer for each node and all the nodes with the same modularity are part of the same community. The Louvain method of community detection is an algorithm for detecting communities in networks that relies upon a heuristic for maximizing the modularity. 
+// Clean up worker threads when done
+await cleanup();
+```
 
+## API Reference
 
-### **betweenness**
-Betweenness centrality represents the degree to which nodes stand between each other. The script computes the shortest-path betweenness centrality for nodes. The betweenness centrality of a node `v` is the sum of the fraction of all-pairs shortest paths that pass through `v`: 
-$$ c_B(v) =\sum_{s,t \in V} \frac{\sigma(s, t|v)}{\sigma(s, t)} $$ 
-where `V` is the set of nodes, 
-is the number of shortest $(s, t)$ paths, and $\sigma(s, t|v)$ is the number of those paths passing through some node `v` other than $s, t$. If $s = t$, $\sigma(s, t) = 1$, and if $v \in {s, t}$, $\sigma(s, t|v) = 0$.
+### Synchronous API
 
-### **clustering**
-For unweighted graphs the clustering of each node `u` is the fraction of possible triangles through that node that exist: 
+#### `getNetworkStats(network, features?, options?)`
+
+Calculate network statistics for a graph (blocking, single-threaded).
+
+**Parameters:**
+
+- `network` **Array&lt;NetworkEdge&gt;** - Array of edge objects with `source` and `target` properties
+- `features` **Array&lt;string&gt; | null** - Features to calculate (defaults to all features)
+- `options` **Object** - Configuration options
+  - `options.verbose` **boolean** - Enable console output (default: `true`)
+  - `options.maxIter` **number** - Max iterations for eigenvector (default: `100000`)
+
+**Returns:** **Array&lt;NodeStats&gt;** - Array of node objects with calculated statistics
+
+**Throws:**
+- `TypeError` - If network is not an array or features is invalid
+- `Error` - If network is empty or contains invalid edges
+
+### Available Features
+
+Import the `FEATURES` constant for easy access to feature names:
+
+```javascript
+import { FEATURES } from 'js-network-stats';
+
+const stats = getNetworkStats(network, [
+  FEATURES.DEGREE,        // Node degree (number of connections)
+  FEATURES.EIGENVECTOR,   // Eigenvector centrality
+  FEATURES.BETWEENNESS,   // Betweenness centrality
+  FEATURES.CLOSENESS,     // Closeness centrality
+  FEATURES.HARMONIC,      // Harmonic centrality
+  FEATURES.PAGERANK,      // PageRank
+  FEATURES.CLUSTERING,    // Clustering coefficient
+  FEATURES.CLIQUES,       // Number of cliques
+  FEATURES.MODULARITY     // Community detection (Louvain)
+]);
+```
+
+Or use `null` to calculate all features:
+
+```javascript
+const allStats = getNetworkStats(network, null);
+```
+
+## Feature Descriptions
+
+### `eigenvector`
+**Eigenvector Centrality** - Measures node influence based on connections to other high-scoring nodes. Computed using the Perron-Frobenius theorem on the adjacency matrix.
+
+**Range:** 0-1 (higher = more influential)
+
+### `betweenness`
+**Betweenness Centrality** - Measures how often a node lies on shortest paths between other nodes. Useful for identifying "bridge" nodes in a network.
+
+**Formula:**
+$$c_B(v) =\sum_{s,t \in V} \frac{\sigma(s, t|v)}{\sigma(s, t)}$$
+
+**Range:** 0-1 (higher = more critical for connectivity)
+
+### `closeness`
+**Closeness Centrality** - Measures how close a node is to all other nodes in the network. Nodes with high closeness can quickly reach all other nodes.
+
+**Formula:**
+$$C(u) = \frac{n - 1}{\sum_{v=1}^{n-1} d(v, u)}$$
+
+where $d(v, u)$ is the shortest-path distance between vertices $v$ and $u$, and $n$ is the number of nodes.
+
+**Range:** 0-1 (higher = more central/accessible)
+
+**Use cases:** Finding optimal warehouse locations, identifying central hubs in transportation networks
+
+### `harmonic`
+**Harmonic Centrality** - A variant of closeness centrality that uses the harmonic mean of distances. Better suited for disconnected graphs as it handles infinite distances gracefully.
+
+**Formula:**
+$$H(u) = \sum_{v \neq u} \frac{1}{d(v, u)}$$
+
+**Range:** 0 to n-1 (higher = more central)
+
+**Use cases:** Analyzing social networks with disconnected communities, real-world networks with unreachable nodes
+
+### `pagerank`
+**PageRank** - Google's algorithm for ranking web pages. Computes node importance based on the structure and weight of incoming connections. A node is important if it's linked to by other important nodes.
+
+**Range:** 0-1 (sum of all scores = 1)
+
+**Parameters:**
+- `alpha`: Damping factor (default: 0.85) - probability of continuing random walk
+- `maxIter`: Maximum iterations (default: 100)
+
+**Use cases:** Finding influencers in social networks, identifying authoritative nodes, ranking importance
+
+### `clustering`
+**Clustering Coefficient** - Measures how densely connected a node's neighbors are. Indicates local community structure.
+
+**Formula (unweighted):**
 $$c_u = \frac{2 T(u)}{deg(u)(deg(u)-1)}$$
-where $T(u)$ is the number of triangles through node u and $deg(u)$ is the degree of $u$.
 
-### **cliques**
-Maximal cliques are the largest complete subgraph containing a given node. The largest maximal clique is sometimes called the maximum clique.
+**Range:** 0-1 (1 = all neighbors are connected)
 
-### **degree**
-The node degree is the number of edges adjacent to the node. The weighted node degree is the sum of the edge weights for edges incident to that node.
+### `cliques`
+**Maximal Cliques** - The largest complete subgraph containing a given node. All nodes in a clique are directly connected.
+
+**Returns:** Integer (number of cliques)
+
+### `degree`
+**Node Degree** - The number of edges connected to a node. For weighted graphs, this is the sum of edge weights.
+
+**Returns:** Integer or float (for weighted graphs)
+
+### `modularity`
+**Community Detection (Louvain)** - Assigns nodes to communities using modularity optimization. Nodes in the same community are more densely connected.
+
+**Returns:** Integer (community ID)
+
+### Async API
+
+#### `getNetworkStatsAsync(network, features?, options?)`
+
+Calculate network statistics asynchronously with optional worker thread support (non-blocking).
+
+**Import:**
+```javascript
+import { getNetworkStatsAsync, cleanup } from 'js-network-stats/async';
+```
+
+**Parameters:**
+
+- `network` **Array&lt;NetworkEdge&gt;** - Array of edge objects
+- `features` **Array&lt;string&gt; | null** - Features to calculate
+- `options` **Object** - Configuration options
+  - `options.verbose` **boolean** - Enable console output (default: `true`)
+  - `options.maxIter` **number** - Max iterations for eigenvector (default: `100000`)
+  - `options.workers` **boolean | 'auto'** - Worker mode (default: `'auto'`)
+    - `true` - Force use of worker threads
+    - `false` - Force synchronous computation
+    - `'auto'` - Smart detection based on graph size
+  - `options.workerThreshold` **number** - Edge count threshold for auto mode (default: `500`)
+  - `options.maxWorkers` **number** - Maximum worker threads (default: CPU count - 1)
+  - `options.taskTimeout` **number** - Task timeout in ms (default: `60000`)
+  - `options.onProgress` **Function** - Progress callback receiving 0-1 progress value
+
+**Returns:** **Promise&lt;Array&lt;NodeStats&gt;&gt;** - Promise resolving to node statistics
+
+**Examples:**
+
+```javascript
+// Simple async usage (auto worker detection)
+const stats = await getNetworkStatsAsync(network, ['degree']);
+
+// With progress callback
+const stats = await getNetworkStatsAsync(network, ['betweenness'], {
+  onProgress: (p) => console.log(`Progress: ${Math.round(p * 100)}%`)
+});
+
+// Force workers on
+const stats = await getNetworkStatsAsync(network, ['degree'], {
+  workers: true
+});
+
+// Force sync mode (no workers)
+const stats = await getNetworkStatsAsync(network, ['degree'], {
+  workers: false
+});
+
+// Custom worker threshold
+const stats = await getNetworkStatsAsync(network, ['degree'], {
+  workers: 'auto',
+  workerThreshold: 1000 // Use workers for graphs > 1000 edges
+});
+
+// Don't forget to cleanup when done!
+await cleanup();
+```
+
+**When to use async API:**
+- ✅ Large graphs (>500 edges)
+- ✅ Long-running servers
+- ✅ CLI tools with progress feedback
+- ✅ When you need non-blocking computation
+- ❌ AWS Lambda (use sync API - workers add overhead)
+- ❌ Very small graphs (<100 edges)
+
+#### `cleanup()`
+
+Terminates worker threads and frees resources. Call this when you're done with async operations.
+
+```javascript
+import { cleanup } from 'js-network-stats/async';
+
+// After all async work is complete
+await cleanup();
+```
+
+## Examples
+
+### TypeScript Usage
+
+```typescript
+import { getNetworkStats, FEATURES, NodeStats, NetworkEdge } from 'js-network-stats';
+
+const network: NetworkEdge[] = [
+  { source: 'A', target: 'B', weight: 1.5 },
+  { source: 'B', target: 'C', weight: 2.0 }
+];
+
+const stats: NodeStats[] = getNetworkStats(network, [FEATURES.DEGREE]);
+```
+
+### Serverless (AWS Lambda)
+
+```javascript
+import { getNetworkStats, FEATURES } from 'js-network-stats';
+
+export const handler = async (event) => {
+  const network = JSON.parse(event.body);
+
+  try {
+    const stats = getNetworkStats(
+      network,
+      [FEATURES.DEGREE, FEATURES.BETWEENNESS],
+      { verbose: false } // Disable console logs in Lambda
+    );
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify(stats)
+    };
+  } catch (error) {
+    return {
+      statusCode: 400,
+      body: JSON.stringify({ error: error.message })
+    };
+  }
+};
+```
+
+### Error Handling
+
+```javascript
+import { getNetworkStats, FEATURES } from 'js-network-stats';
+
+try {
+  const stats = getNetworkStats(network, [FEATURES.DEGREE]);
+} catch (error) {
+  if (error instanceof TypeError) {
+    console.error('Invalid input type:', error.message);
+  } else {
+    console.error('Analysis failed:', error.message);
+  }
+}
+```
+
+### Selective Feature Calculation
+
+Calculate only what you need for better performance:
+
+```javascript
+// Fast: Only degree calculation
+const degreeOnly = getNetworkStats(network, [FEATURES.DEGREE]);
+
+// Medium: Degree + clustering
+const localMetrics = getNetworkStats(network, [FEATURES.DEGREE, FEATURES.CLUSTERING]);
+
+// Slow: Betweenness (O(n³) complexity)
+const centrality = getNetworkStats(network, [FEATURES.BETWEENNESS]);
+```
+
+## Performance Notes
+
+- **Degree**: O(V) - Very fast
+- **Clustering**: O(V·d²) - Fast for sparse graphs
+- **Eigenvector**: O(V²) - Medium, depends on maxIter
+- **Betweenness**: O(V³) - Slow for large graphs (>1000 nodes)
+- **Louvain**: O(n log n) - Medium, depends on graph density
+
+For large graphs (>10,000 nodes), consider using [@guinetik/graph-js](https://github.com/guinetik/graph-js) which provides worker-based parallelism.
+
+## Migration to @guinetik/graph-js
+
+If you need advanced features, migrate to the new package:
+
+**js-network-stats** (this package):
+```javascript
+import { getNetworkStats } from 'js-network-stats';
+const stats = getNetworkStats(network, ['degree']);
+```
+
+**@guinetik/graph-js** (new package):
+```javascript
+import NetworkStats from '@guinetik/graph-js';
+
+const analyzer = new NetworkStats();
+const stats = await analyzer.analyze(network, ['degree']); // Async with workers!
+```
+
+**Key Differences:**
+
+| Feature | js-network-stats | @guinetik/graph-js |
+|---------|------------------|---------------------|
+| API Style | Synchronous | Async/await |
+| Workers | ❌ No | ✅ Yes (parallel computation) |
+| Progress Callbacks | ❌ No | ✅ Yes |
+| Graph Layouts | ❌ No | ✅ 11 algorithms |
+| Custom Graph Class | ❌ No | ✅ Yes |
+| Browser Support | ❌ No | ✅ Yes |
+| Best For | Serverless, simple batch jobs | Large graphs, interactive apps |
+
+## Contributing
+
+This package is in maintenance mode. Bug fixes are welcome, but new features should go to [@guinetik/graph-js](https://github.com/guinetik/graph-js).
+
+## License
+
+MIT © [guinetik](https://github.com/guinetik)
+
+## Links
+
+- [GitHub Repository](https://github.com/guinetik/js-network-stats)
+- [npm Package](https://www.npmjs.com/package/js-network-stats)
+- [Advanced Features → @guinetik/graph-js](https://github.com/guinetik/graph-js)

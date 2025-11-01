@@ -1,4 +1,9 @@
-const louvain = () => {
+/**
+ * Louvain community detection algorithm
+ * Detects communities in networks using modularity optimization
+ * @returns {Function} Core function for community detection
+ */
+export const louvain = () => {
   //Constants
   var __PASS_MAX = -1;
   var __MIN = 0.0000001;
@@ -399,4 +404,5 @@ const louvain = () => {
 
   return core;
 };
-module.exports = louvain;
+
+export default louvain;
